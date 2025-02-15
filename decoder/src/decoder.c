@@ -154,22 +154,6 @@ int is_subscribed(channel_id_t channel) {
     return 0;
 }
 
-/** @brief Prints the boot reference design flag
- *
- *  TODO: Remove this in your final design
-*/
-void boot_flag(void) {
-    char flag[28];
-    char output_buf[128] = {0};
-
-    for (int i = 0; aseiFuengleR[i]; i++) {
-        flag[i] = deobfuscate(aseiFuengleR[i], djFIehjkklIH[i]);
-        flag[i+1] = 0;
-    }
-    sprintf(output_buf, "Boot Reference Flag: %s\n", flag);
-    print_debug(output_buf);
-}
-
 
 /**********************************************************
  ********************* CORE FUNCTIONS *********************
@@ -409,9 +393,7 @@ int main(void) {
                 crypto_example();
             #endif // CRYPTO_EXAMPLE
 
-            // Print the boot flag
-            // TODO: Remove this from your design
-            boot_flag();
+            
             list_channels();
             break;
 
