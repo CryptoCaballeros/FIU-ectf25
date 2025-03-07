@@ -7,33 +7,38 @@ jobs:
   mention_team:
     runs-on: ubuntu-latest
     steps:
-      - name: Check issue labels
+      - name: Check issue labels and mention teams
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const issue = context.payload.issue;
             const labels = issue.labels.map(label => label.name);
-            let mention = "";
+            let mentions = [];
 
             // Define label-to-team mappings
             if (labels.includes("Blue Team")) {
-              mention = "@CryptoCaballeros/blue-team";
-            } else if (labels.includes("Red Team")) {
-              mention = "@CryptoCaballeros/red-team";
-            } else if (labels.includes("Developers")) {
-              mention = "@CryptoCaballeros/developers";
-            } else if (labels.includes("Everyone")) {
-              mention = "@CryptoCaballeros/everyone";
-            } else if (labels.include("Researchers")) {
-              mention = "@CryptoCaballeros/researchers"
+              mentions.push("@CryptoCaballeros/blue-team");
+            }
+            if (labels.includes("Red Team")) {
+              mentions.push("@CryptoCaballeros/red-team");
+            }
+            if (labels.includes("Developers")) {
+              mentions.push("@CryptoCaballeros/developers");
+            }
+            if (labels.includes("Everyone")) {
+              mentions.push("@CryptoCaballeros/everyone");
+            }
+            if (labels.includes("Researchers")) { // FIXED TYPO HERE
+              mentions.push("@CryptoCaballeros/researchers");
             }
 
-            if (mention) {
+            if (mentions.length > 0) {
+              const mentionText = mentions.join(" "); // Mention multiple teams in one comment
               github.rest.issues.createComment({
                 issue_number: issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: `🔔 Hey ${mention}, this issue needs your attention!`
+                body: `🔔 Hey ${mentionText}, this issue needs your attention!`
               });
             }
