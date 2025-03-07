@@ -50,4 +50,3 @@ jobs:
                   body: `🔔 Hey ${mentionText}, this issue needs your attention!`
                 });
               }
-            }
