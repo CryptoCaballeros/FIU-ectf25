@@ -153,7 +153,10 @@ def parse_args():
 
     subparsers = parser.add_subparsers(required=True)
 
-    encode_parser = subparsers.add_parser("encode", help="Test the encoder")
+    encode_parser = subparsers.add_parser(
+        "encode", 
+        help="Test the encoder"
+    )
     encode_parser.set_defaults(tester=test_encoder)
     encode_parser.set_defaults(threshold=64_000.0)
     encode_parser.add_argument(
@@ -168,7 +171,10 @@ def parse_args():
         help="Filename of the encoded frames",
     )
 
-    decode_parser = subparsers.add_parser("decode", help="Test the decoder")
+    decode_parser = subparsers.add_parser(
+        "decode", 
+        help="Test the decoder"
+        )
     decode_parser.set_defaults(tester=test_decoder)
     decode_parser.set_defaults(threshold=640.0)
     decode_parser.add_argument(

@@ -266,13 +266,25 @@ class StabilityTester:
 def parse_args():
     parser = argparse.ArgumentParser(prog="stability_test.py")
     parser.add_argument(
-        "-p", "--port", required=True, type=str, help="Decoder serial port"
+        "-p", 
+        "--port", 
+        required=True, 
+        type=str, 
+        help="Decoder serial port"
     )
     parser.add_argument(
-        "-g", "--global-secrets", required=True, type=str, help="Path to global secrets"
+        "-g", 
+        "--global-secrets", 
+        required=True, 
+        type=str, 
+        help="Path to global secrets"
     )
     parser.add_argument(
-        "-c", "--channel", required=True, type=int, help="Channel to test on"
+        "-c", 
+        "--channel", 
+        required=True, 
+        type=int, 
+        help="Channel to test on"
     )
     parser.add_argument(
         "-di",

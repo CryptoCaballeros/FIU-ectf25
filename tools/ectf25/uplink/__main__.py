@@ -19,7 +19,9 @@ from ectf25.uplink import Channel, Uplink
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "secrets", type=argparse.FileType("rb"), help="Path to the secrets file"
+        "secrets", 
+        type=argparse.FileType("rb"), 
+        help="Path to the secrets file"
     )
     parser.add_argument(
         "host", 

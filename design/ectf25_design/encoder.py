@@ -115,11 +115,24 @@ def main():
         
     parser = argparse.ArgumentParser(prog="ectf25_design.encoder")
     parser.add_argument(
-        "secrets_file", type=argparse.FileType("rb"), help="Path to the secrets file"
+        "secrets_file", 
+        type=argparse.FileType("rb"), 
+        help="Path to the secrets file"
     )
-    parser.add_argument("channel", type=int, help="Channel to encode for")
-    parser.add_argument("frame", help="Contents of the frame")
-    parser.add_argument("timestamp", type=int, help="64b timestamp to use")
+    parser.add_argument(
+        "channel", 
+        type=int, 
+        help="Channel to encode for"
+    )
+    parser.add_argument(
+        "frame", 
+        help="Contents of the frame"
+    )
+    parser.add_argument(
+        "timestamp", 
+        type=int, 
+        help="64b timestamp to use"
+    )
     args = parser.parse_args()
 
     encoder = Encoder(args.secrets_file.read())
