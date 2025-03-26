@@ -283,8 +283,7 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
             print_debug("Timestamp Valid\n");
             prev_frame_timestamp = timestamp;
         } else {
-            STATUS_LED_RED();
-            printf("Timestamp invalid.");
+            //timestamp errors are printed in timestamp_valid()
             return -1;
         }
         write_packet(DECODE_MSG, new_frame->data, frame_size);
