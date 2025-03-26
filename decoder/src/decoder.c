@@ -276,6 +276,10 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
 
     // Check that we are subscribed to the channel...
     print_debug("Checking subscription\n");
+
+    
+    //CHECKS IF SECURITY CHECKS PASSED
+    
     if (is_subscribed(channel)) {
         print_debug("Subscription Valid\n");
         print_debug("Checking timestamp\n");
@@ -289,6 +293,10 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
         write_packet(DECODE_MSG, new_frame->data, frame_size);
         return 0;
     } else {
+
+        //IPS DELAYS 5 SECONDS ON INVALID SUBSCRIPTION
+        MXC_Delay(MAXC_DELAY_MSEC(5000));
+        
         STATUS_LED_RED();
         sprintf(
             output_buf,
