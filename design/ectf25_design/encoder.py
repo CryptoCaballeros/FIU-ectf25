@@ -33,7 +33,7 @@ class Encoder:
 
         # Load the example secrets for use in Encoder.encode
         # This will be "EXAMPLE" in the reference design"
-        self.some_secrets = secrets["some_secrets"]
+        # self.some_secrets = secrets["some_secrets"]
 
     def userarray(self):
         """
