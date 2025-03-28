@@ -161,12 +161,7 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
         MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Timestamp invalid - non-monotonic.");
-<<<<<<< HEAD
-        print_debug("stops here");
         return -1;
-=======
-        return 0;
->>>>>>> 88db68ac6162069029b43cd64762c26f6b0886c4
     }
 
     // Check if the timestamp is within the subscription window
@@ -180,10 +175,11 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
                 MXC_Delay(MXC_DELAY_MSEC(5000));
                 STATUS_LED_ERROR();
                 print_error("Timestamp invalid - outside of subscription window.");
-                return 0;
+                return -1;
             }
         }
     }
+    return 0;
 }
 
 
