@@ -147,6 +147,7 @@ int is_subscribed(channel_id_t channel) {
  *
  *  @param timestamp The timestamp to be checked.
  *  @param channel The channel number to be checked.
+ * 
  *  @return 1 if the timestamp is valid for the channel.  0 if not.
 */
 int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
@@ -156,8 +157,11 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
     }
     //ensure timestamp is increasing monotonically
     if (timestamp <= prev_frame_timestamp) {
+        //IPS DELAYS 5 SECONDS ON INVALID SUBSCRIPTION
+        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Timestamp invalid - non-monotonic.");
+        print_debug("stops here");
         return -1;
     }
 
@@ -168,6 +172,8 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
                 return 1;
             }
             else {
+                //IPS DELAYS 5 SECONDS ON INVALID SUBSCRIPTION
+                MXC_Delay(MXC_DELAY_MSEC(5000));
                 STATUS_LED_ERROR();
                 print_error("Timestamp invalid - outside of subscription window.");
                 return -1;
@@ -288,6 +294,8 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
             prev_frame_timestamp = timestamp;
         } else {
             //timestamp errors are printed in timestamp_valid()
+            //IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
+            MXC_Delay(MXC_DELAY_MSEC(5000));
             return -1;
         }
         write_packet(DECODE_MSG, new_frame->data, frame_size);
