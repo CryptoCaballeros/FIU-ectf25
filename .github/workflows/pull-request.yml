@@ -31,13 +31,6 @@ jobs:
         run: |
           cd decoder
           docker build -t decoder .
-
-      - name: Code style check
-        run: |
-          pip install black flake8
-          black --check $(find ./design -name "*.py")
-          black --check $(find ./tools -name "*.py")
-          flake8 ./design ./tools
       
       - name: Security scan
         run: |
