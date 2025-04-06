@@ -175,15 +175,15 @@ int hash(void *data, size_t len, uint8_t *hash_out) {
     return 0;
 }
 
-/** @brief Creates HMAC object using WOLFSSL
+/** @brief Creates HMAC object using wolfSSL hash function
  * 
- *  @param key 
- *  @param key_len
- *  @param message
- *  @param message_len
- *  @param hmac_output buffer of
+ *  @param key A pointer to a buffer of length key_len containing key for HMAC
+ *  @param key_len The length of the key to be used for HMAC
+ *  @param message A pointer to a buffer of length message_len containing message for HMAC
+ *  @param message_len The length of message to be used for HMAC
+ *  @param hmac_output The computed output of HMAC
  * 
- *  @return computed HMAC
+ *  @return 0 if successful
  * 
  *  @note Standard HMAC implementation (H is the hash function, K is the key)
  *  HMAC(K,m) = H((K' ⊕ opad) || H((K' ⊕ ipad) || m))
