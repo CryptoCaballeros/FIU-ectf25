@@ -157,6 +157,7 @@ def main():
             f.write("static inline void load_encryption_key(uint8_t *key_buffer) {\n")
             f.write("    for (int i = 0; i < ENCRYPTION_KEY_SIZE; i++) {\n")
             f.write("        key_buffer[i] = ENCRYPTION_KEY[i];\n")
+            f.write("         ")
             f.write("    }\n")
             f.write("}\n\n")
 

@@ -65,6 +65,7 @@ typedef struct {
     timestamp_t timestamp;
     uint8_t iv[16];                // Initialization Vector
     uint8_t auth_tag[HASH_SIZE];   // Buffer for authentication
+    uint8_t nonce[4];
     uint8_t data[];              // Holds data frame data
 } frame_packet_t;
 
@@ -215,6 +216,13 @@ static int constant_time_memcmp(const void* a, const void* b, size_t len) {
     return (result != 0);
 }
 
+uint32_t bytes_to_int(uint8_t *bytes, size_t size) {
+    uint32_t result = 0;
+    for (int i = size - 1; i >= 0; i--) { // little endian
+        result = (result << 8) | bytes[i];
+    }
+    return result;
+}
 
 /**********************************************************
  ********************* CORE FUNCTIONS *********************
@@ -280,11 +288,11 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     }
 
     // Debug output
-    print_debug("\n=== C DEBUGGING VALUES ===");
-    sprintf(debug_buf, "Device ID (hex): 0x%08X", update->decoder_id);
-    print_debug(debug_buf);
-    sprintf(debug_buf, "Device ID (int): %u", update->decoder_id);
-    print_debug(debug_buf);
+    // print_debug("\n=== C DEBUGGING VALUES ===");
+    // sprintf(debug_buf, "Device ID (hex): 0x%08X", update->decoder_id);
+    // print_debug(debug_buf);
+    // sprintf(debug_buf, "Device ID (int): %u", update->decoder_id);
+    // print_debug(debug_buf);
 
     // Create a buffer with the subscription data to verify signature
     uint8_t verify_buffer[sizeof(decoder_id_t) + sizeof(timestamp_t) * 2 + sizeof(channel_id_t)];
@@ -300,22 +308,22 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     memcpy(verify_buffer + sizeof(decoder_id_t) + sizeof(timestamp_t) * 2,
         &update->channel, sizeof(channel_id_t));
 
-    print_debug("Data Buffer (hex):");
-    print_hex_debug(verify_buffer, sizeof(verify_buffer));
+    // print_debug("Data Buffer (hex):");
+    // print_hex_debug(verify_buffer, sizeof(verify_buffer));
 
     // Get subscription/master key using the load_subscription_key function
     uint8_t key_bytes[SUBSCRIPTION_KEY_SIZE];
     load_subscription_key(key_bytes);
 
-    print_debug("Master Key (hex):");
-    print_hex_debug(key_bytes, SUBSCRIPTION_KEY_SIZE);
+    // print_debug("Master Key (hex):");
+    // print_hex_debug(key_bytes, SUBSCRIPTION_KEY_SIZE);
 
     // Convert device ID to bytes (similar to Python format)
     uint8_t device_id_bytes[sizeof(decoder_id_t)]; // buffer for device id
     memcpy(device_id_bytes, &update->decoder_id, sizeof(decoder_id_t));
 
-    print_debug("Device ID Bytes (hex):");
-    print_hex_debug(device_id_bytes, sizeof(device_id_bytes));
+    // print_debug("Device ID Bytes (hex):");
+    // print_hex_debug(device_id_bytes, sizeof(device_id_bytes));
 
     // Create device-specific key input buffer
     uint32_t device_key_input_size = SUBSCRIPTION_KEY_SIZE + sizeof(decoder_id_t);
@@ -328,10 +336,10 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     memcpy(device_key_input, key_bytes, SUBSCRIPTION_KEY_SIZE);
     memcpy(device_key_input + SUBSCRIPTION_KEY_SIZE, device_id_bytes, sizeof(decoder_id_t));
 
-    print_debug("Device Key Input (hex):");
-    print_hex_debug(device_key_input, device_key_input_size);
-    sprintf(debug_buf, "Device Key Input Length: %u", device_key_input_size);
-    print_debug(debug_buf);
+    // print_debug("Device Key Input (hex):");
+    // print_hex_debug(device_key_input, device_key_input_size);
+    // sprintf(debug_buf, "Device Key Input Length: %u", device_key_input_size);
+    // print_debug(debug_buf);
 
     // Hash to create device key (master key + device ID)
     memset(device_key, 0, HASH_SIZE);
@@ -347,8 +355,8 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
         print_error("Failed to update subscription - hash computation error\n");
         return -1;
     }
-    print_debug("Device Key (hex):");
-    print_hex_debug(device_key, HASH_SIZE);
+    // print_debug("Device Key (hex):");
+    // print_hex_debug(device_key, HASH_SIZE);
 
     // Compute HMAC: H((device key ⊕ opad) || H((device key ⊕ ipad) || verify buffer))
     hash_result = compute_hmac(device_key, HASH_SIZE, verify_buffer, sizeof(verify_buffer), computed_hash);
@@ -364,17 +372,17 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
         return -1;
     }
 
-    print_debug("computed Signature (hex):");
-    print_hex_debug(computed_hash, HASH_SIZE);
-    print_debug("Expected Signature (hex):");
-    print_hex_debug(update->signature, HASH_SIZE);
-    print_debug("=== END C DEBUGGING ===\n");
+    // print_debug("computed Signature (hex):");
+    // print_hex_debug(computed_hash, HASH_SIZE);
+    // print_debug("Expected Signature (hex):");
+    // print_hex_debug(update->signature, HASH_SIZE);
+    // print_debug("=== END C DEBUGGING ===\n");
 
     // Securely clear the key from memory when done
     secure_clear(key_bytes, SUBSCRIPTION_KEY_SIZE);
     secure_clear(device_key_input, device_key_input_size);
 
-    print_debug("Verifying subscription signature...\n");
+    // print_debug("Verifying subscription signature...\n");
 
     // Verify the signature in constant time
     if (constant_time_memcmp(computed_hash, update->signature, HASH_SIZE) != 0) {
@@ -385,7 +393,7 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
         return -1;
     }
 
-    print_debug("Signature verified successfully\n");
+    // print_debug("Signature verified successfully\n");
 
     // Find the first empty slot or existing subscripiton in the subscription array for this channel
     for (i = 0; i < MAX_CHANNEL_COUNT; i++) {
@@ -468,30 +476,30 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     timestamp_t timestamp = new_frame->timestamp; // timestamp of new frame
 
     // Add debug output
-    sprintf(output_buf, "Receiving frame for channel: %u with timestamp: %llu", 
-            channel, (unsigned long long)timestamp);
-    print_debug(output_buf);
+    // sprintf(output_buf, "Receiving frame for channel: %u with timestamp: %llu", 
+    //         channel, (unsigned long long)timestamp);
+    // print_debug(output_buf);
 
-    print_debug("\n===== RAW PACKET DATA =====");
-    print_hex_debug((uint8_t*)new_frame, pkt_len);
-    print_debug("===== END RAW PACKET DATA =====\n");
+    // print_debug("\n===== RAW PACKET DATA =====");
+    // print_hex_debug((uint8_t*)new_frame, pkt_len);
+    // print_debug("===== END RAW PACKET DATA =====\n");
 
     // Calculate Components' Sizes
-    print_debug("Packet structure analysis:");
-    sprintf(debug_buf, "Total packet length: %u bytes", pkt_len);
-    print_debug(debug_buf);
+    // print_debug("Packet structure analysis:");
+    // sprintf(debug_buf, "Total packet length: %u bytes", pkt_len);
+    // print_debug(debug_buf);
 
     // Header size - Ciphertext size - data
     uint16_t header_size = sizeof(new_frame->channel) 
-                        + sizeof(new_frame->timestamp) 
-                        + sizeof(new_frame->iv) + sizeof(new_frame->auth_tag);
-    sprintf(debug_buf, "Header size: %u bytes", header_size);
-    print_debug(debug_buf);
+                        + sizeof(new_frame->timestamp)
+                        + sizeof(new_frame->iv) + sizeof(new_frame->auth_tag) + sizeof(new_frame->nonce);
+    // sprintf(debug_buf, "Header size: %u bytes", header_size);
+    // print_debug(debug_buf);
     // Ciphertext size - the size of the packet minus 
     // the size of non-frame elements (header)
     uint16_t ciphertext_size = pkt_len - header_size;
-    sprintf(debug_buf, "Calculated ciphertext size: %u bytes", ciphertext_size);
-    print_debug(debug_buf);
+    // sprintf(debug_buf, "Calculated ciphertext size: %u bytes", ciphertext_size);
+    // print_debug(debug_buf);
 
     // Validate total packet length
     if (pkt_len < header_size) {
@@ -507,18 +515,18 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     unsigned char *auth_tag = new_frame->auth_tag; // Extract auth_tag (HMAC)
 
     // Dump memory locations for debugging
-    sprintf(debug_buf, "Frame packet starts at: %p", new_frame);
-    print_debug(debug_buf);
-    sprintf(debug_buf, "IV starts at: %p", iv);
-    print_debug(debug_buf);
-    sprintf(debug_buf, "Auth tag should start at: %p", auth_tag);
-    print_debug(debug_buf);
-    sprintf(debug_buf, "Data starts at: %p", ciphertext);
-    print_debug(debug_buf);
+    // sprintf(debug_buf, "Frame packet starts at: %p", new_frame);
+    // print_debug(debug_buf);
+    // sprintf(debug_buf, "IV starts at: %p", iv);
+    // print_debug(debug_buf);
+    // sprintf(debug_buf, "Auth tag should start at: %p", auth_tag);
+    // print_debug(debug_buf);
+    // sprintf(debug_buf, "Data starts at: %p", ciphertext);
+    // print_debug(debug_buf);
     
     // Dump auth tag content
-    print_debug("Auth tag content (hex):");
-    print_hex_debug(auth_tag, HASH_SIZE);
+    // print_debug("Auth tag content (hex):");
+    // print_hex_debug(auth_tag, HASH_SIZE);
 
     // Verify HMAC first
     uint8_t computed_hmac[HASH_SIZE];
@@ -531,8 +539,8 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     memcpy(hmac_input + sizeof(channel_id_t) + sizeof(timestamp_t) + 16, ciphertext, ciphertext_size);
 
     // Debug hmac input
-    print_debug("hmac_input:");
-    print_hex_debug(hmac_input, sizeof(hmac_input));
+    // print_debug("hmac_input:");
+    // print_hex_debug(hmac_input, sizeof(hmac_input));
 
     // Get encryption key from secrets
     uint8_t encryption_key[ENCRYPTION_KEY_SIZE];
@@ -540,20 +548,61 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     print_debug("encryption_key:");
     print_hex_debug(encryption_key, ENCRYPTION_KEY_SIZE);
 
+
+    // TODO: add the nonce
+    print_debug("nonce_input:");
+    print_hex_debug(new_frame->nonce, sizeof(new_frame->nonce));
+
+    uint8_t nonce1 = bytes_to_int(new_frame->nonce, sizeof(new_frame->nonce));
+    uint8_t present_encryption_key[HASH_SIZE];
+    int hash_result = hash(encryption_key, ENCRYPTION_KEY_SIZE, present_encryption_key);
+    if (hash_result != 0) {
+        char error_buf[64];
+        sprintf(error_buf, "WolfSSL hash returned error: %d", hash_result);
+        print_debug(error_buf);
+        return -1;
+    }
+    secure_clear(encryption_key, ENCRYPTION_KEY_SIZE);
+
+    uint8_t temp_key[HASH_SIZE];
+
+    // Iterate the hash 'nonce1' times
+    for (int i = 0; i < nonce1; i++) {
+        // Copy the current key to temp before hashing
+
+        // if(nonce1 % 100 == 0) {
+        //     load_encryption_key(encryption_key);
+        // }
+        memcpy(temp_key, present_encryption_key, HASH_SIZE);
+        
+        // Hash the current key
+        hash_result = hash(temp_key, HASH_SIZE, present_encryption_key);
+        
+        if (hash_result != 0) {
+            char error_buf[64];
+            sprintf(error_buf, "WolfSSL hash returned error: %d", hash_result);
+            print_debug(error_buf);
+            return -1;
+        }
+    }
+    secure_clear(present_encryption_key, ENCRYPTION_KEY_SIZE);
+
+
+
     // Get MAC key from secrets
     uint8_t mac_key [MAC_KEY_SIZE];
     load_MAC_key(mac_key);
-    print_debug("MAC_key: ");
-    print_hex_debug(mac_key, MAC_KEY_SIZE);
+    // print_debug("MAC_key: ");
+    // print_hex_debug(mac_key, MAC_KEY_SIZE);
 
     // Compute HMAC
     compute_hmac(mac_key, MAC_KEY_SIZE, hmac_input, sizeof(hmac_input), computed_hmac);
 
     // Debug key_input & computed hmac
-    print_debug("Computed_hash:");
-    print_hex_debug(computed_hmac, sizeof(computed_hmac));
-    print_debug("auth_tag:");
-    print_hex_debug(auth_tag, HASH_SIZE);
+    // print_debug("Computed_hash:");
+    // print_hex_debug(computed_hmac, sizeof(computed_hmac));
+    // print_debug("auth_tag:");
+    // print_hex_debug(auth_tag, HASH_SIZE);
 
 
     // Verify HMAC in constant time
@@ -569,13 +618,13 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     //CHECKS IF SECURITY CHECKS PASSED
 
     // Check that we are subscribed to the channel...
-    print_debug("Checking subscription\n");
+    // print_debug("Checking subscription\n");
     if (is_subscribed(channel)) {
-        print_debug("Subscription Valid\n");
+        // print_debug("Subscription Valid\n");
 
-        print_debug("Checking timestamp\n");
+        // print_debug("Checking timestamp\n");
         if (timestamp_valid(timestamp, channel)) {
-            print_debug("Timestamp Valid\n");
+            // print_debug("Timestamp Valid\n");
             prev_frame_timestamp = timestamp;
         } else {
             //timestamp errors are printed in timestamp_valid()
@@ -583,21 +632,21 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
         }
 
         // Before writing the bytes, decrypt
-        print_debug("Decrypting Frame\n");
+        // print_debug("Decrypting Frame\n");
         uint8_t decrypted_data[FRAME_SIZE];
         int decrypted_size;
 
-        decrypted_size = aes_decrypt(ciphertext, ciphertext_size, encryption_key, iv, decrypted_data);
+        decrypted_size = aes_decrypt(ciphertext, ciphertext_size, temp_key, iv, decrypted_data);
         if (decrypted_size < 0) {
-            secure_clear(encryption_key, ENCRYPTION_KEY_SIZE); // clear encryption key
+            secure_clear(temp_key, ENCRYPTION_KEY_SIZE); // clear encryption key
             // IPS DELAYS 5 SECONDS ON DECRYPTION FAILURE
             MXC_Delay(MXC_DELAY_MSEC(5000));
             STATUS_LED_ERROR();
             print_error("Decryption failed\n");
             return -1;
         }
-        secure_clear(encryption_key, ENCRYPTION_KEY_SIZE); // clear encryption key
-        print_debug("Decryption Complete\n");
+        secure_clear(temp_key, ENCRYPTION_KEY_SIZE); // clear encryption key
+        // print_debug("Decryption Complete\n");
         write_packet(DECODE_MSG, decrypted_data, FRAME_SIZE); // 
         return 0;
     } else {

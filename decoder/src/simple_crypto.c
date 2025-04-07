@@ -36,16 +36,7 @@ int crypto_init(void) {
         print_debug(debug_buf);
         return -1;
     }
-    
-    // Initialize TRNG hardware
-    result = MXC_TRNG_Init();
-    if (result != E_NO_ERROR) {
-        char debug_buf[64];
-        sprintf(debug_buf, "TRNG initialization failed with code %d", result);
-        print_debug(debug_buf);
-        return -2;
-    }
-     
+         
     crypto_initialized = 1;
     print_debug("Cryptographic hardware initialized successfully");
     return 0;

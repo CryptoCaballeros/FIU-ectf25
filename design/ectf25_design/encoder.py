@@ -17,7 +17,7 @@ import json
 import hmac
 import hashlib
 from wolfcrypt.ciphers import Aes
-
+from wolfcrypt.hashes import Sha256
 
 
 class Encoder:
@@ -33,6 +33,8 @@ class Encoder:
 
         # Extract encryption key for frame encryption
         self.encryption_key = bytes.fromhex(self.secrets["encryption_Key"])
+
+        self.frame_counter = 0
 
         # Extract MAC key for HMAC
         self.MAC_key = bytes.fromhex(self.secrets["MAC_Key"])
@@ -60,8 +62,21 @@ class Encoder:
         # Generate IV for encryption
         iv = urandom(16)   # 16 bytes for AES block size
 
+        # Chain, no recovery version, and no stability tested
+        nonce = self.frame_counter
+        
+        # Evolve key based on nonce
+        evolved_key = self.encryption_key
+        sha256 = Sha256()
+        sha256.update(evolved_key)
+        evolved_key = sha256.digest()
+        for i in range(nonce):
+            sha256 = Sha256()
+            sha256.update(evolved_key)
+            evolved_key = sha256.digest()
+
         # Use stored encryption key
-        aes = Aes(self.encryption_key, 2, iv) # AES-256
+        aes = Aes(evolved_key, 2, iv) # AES-256
 
         # Pad and encrypt frame data
         padding_length = 16 - (len(frame) % 16)
@@ -76,17 +91,21 @@ class Encoder:
 
         # Create HMAC using MAC_key
         auth_tag = hmac.new(self.MAC_key, hmac_input, hashlib.sha256).digest()
-
+        
+        
+        self.frame_counter += 1
+        nonceBytes = self.frame_counter.to_bytes(4, 'little')
         # Print sizes for debugging
         print(f"Plaintext size: {len(frame)} bytes")
         print(f"Padded size: {len(padded_data)} bytes")
         print(f"Ciphertext size: {len(ciphertext)} bytes")
         print(f"Auth tag: {auth_tag.hex()}")
         print(f"Auth tag size: {len(auth_tag)} bytes")
-        print(f"Total packet size: {12 + 16 + len(ciphertext) + len(auth_tag)} bytes")
+        print(f"Nonce size: {len(nonceBytes)} bytes")
+        print(f"Total packet size: {12 + 16 + len(nonceBytes) + len(ciphertext) + len(auth_tag)} bytes")
 
-        # 16 + 32 + 80 bytes = 128 bytes
-        encrypted_frame = iv + auth_tag + ciphertext
+        # 16 + 32 + 4 + 80 bytes = 128 bytes
+        encrypted_frame = iv + auth_tag + nonceBytes + ciphertext 
 
         print(f"all: {encrypted_frame.hex()}")
 
