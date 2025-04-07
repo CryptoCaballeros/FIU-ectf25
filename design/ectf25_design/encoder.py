@@ -71,24 +71,12 @@ class Encoder:
         # Generate HMAC for authentication
         # Combines channel, timestamp, IV, and ciphertext
         hmac_input = struct.pack("<IQ", channel, timestamp) + iv + ciphertext
-        print(f"HMAC input (hex): {hmac_input.hex()}")
-        print(f"Key (hex): {self.MAC_key.hex()}")
 
         # Create HMAC using MAC_key
         auth_tag = hmac.new(self.MAC_key, hmac_input, hashlib.sha256).digest()
 
-        # Print sizes for debugging
-        print(f"Plaintext size: {len(frame)} bytes")
-        print(f"Padded size: {len(padded_data)} bytes")
-        print(f"Ciphertext size: {len(ciphertext)} bytes")
-        print(f"Auth tag: {auth_tag.hex()}")
-        print(f"Auth tag size: {len(auth_tag)} bytes")
-        print(f"Total packet size: {12 + 16 + len(ciphertext) + len(auth_tag)} bytes")
-
         # 16 + 32 + 80 bytes = 128 bytes
         encrypted_frame = iv + auth_tag + ciphertext
-
-        print(f"all: {encrypted_frame.hex()}")
 
         # 12 + 120 bytes = 152 bytes
         return struct.pack("<IQ", channel, timestamp) + encrypted_frame
