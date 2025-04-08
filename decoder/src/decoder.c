@@ -35,12 +35,14 @@
  *********************** CONSTANTS ************************
  **********************************************************/
 
+#define MAX_DECODER_ID_SIZE 8
 #define MAX_CHANNEL_COUNT 8
 #define EMERGENCY_CHANNEL 0
 #define FRAME_SIZE 64
 #define DEFAULT_CHANNEL_TIMESTAMP 0xFFFFFFFFFFFFFFFF
 // This is a canary value so we can confirm whether this decoder has booted before
 #define FLASH_FIRST_BOOT 0xDEADBEEF
+
 
 /**********************************************************
  ********************* STATE MACROS ***********************
@@ -156,7 +158,6 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
     }
     // ensure timestamp is increasing monotonically
     if (timestamp <= prev_frame_timestamp) {
-        // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
         // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
         MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
@@ -522,7 +523,7 @@ void init() {
         while (1);
     }
 
-    if (sizeof(decoder_id_t) > 8) {
+    if (sizeof(decoder_id_t) > MAX_DECODER_ID_SIZE) {
         MXC_Delay(MXC_DELAY_MSEC(5000));
         print_error("Warning: Unexpected device ID size detected\n");
     }

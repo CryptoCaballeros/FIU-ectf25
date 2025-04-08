@@ -74,6 +74,7 @@ class Encoder:
 
         # Create HMAC using MAC_key
         auth_tag = hmac.new(self.MAC_key, hmac_input, hashlib.sha256).digest()
+        
 
         # 16 + 32 + 80 bytes = 128 bytes
         encrypted_frame = iv + auth_tag + ciphertext

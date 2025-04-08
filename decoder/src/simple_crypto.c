@@ -24,29 +24,27 @@
  * 
  *  @return plaintext_len for error messages
  */
-int aes_decrypt(uint8_t* ciphertext, int ciphertext_len, 
-    unsigned char* key, unsigned char* iv, 
-    uint8_t* plaintext) {
-Aes aes;
-int ret;
+int aes_decrypt(uint8_t* ciphertext, int ciphertext_len, unsigned char* key, unsigned char* iv, uint8_t* plaintext) {
+    Aes aes;
+    int ret;
 
-ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
-if (ret != 0) return -1;
+    ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
+    if (ret != 0) return -1;
 
-ret = wc_AesSetKey(&aes, key, ENCRYPTION_KEY_SIZE, iv, AES_DECRYPTION);
-if (ret != 0) return -1;
+    ret = wc_AesSetKey(&aes, key, ENCRYPTION_KEY_SIZE, iv, AES_DECRYPTION);
+    if (ret != 0) return -1;
 
-ret = wc_AesCbcDecrypt(&aes, plaintext, ciphertext, ciphertext_len);
-if (ret != 0) return -1;
+    ret = wc_AesCbcDecrypt(&aes, plaintext, ciphertext, ciphertext_len);
+    if (ret != 0) return -1;
 
-// Remove padding
-int plaintext_len = ciphertext_len;
-while (plaintext_len > 0 && plaintext[plaintext_len-1] == 0) {
-plaintext_len--;
-}
+    // Remove padding
+    int plaintext_len = ciphertext_len;
+    while (plaintext_len > 0 && plaintext[plaintext_len-1] == 0) {
+    plaintext_len--;
+    }
 
-wc_AesFree(&aes);
-return plaintext_len;
+    wc_AesFree(&aes);
+    return plaintext_len;
 }
  
 /** @brief Hash data using wolfSSL SHA-256
@@ -133,6 +131,10 @@ int compute_hmac(uint8_t *key, size_t key_len, uint8_t *message, size_t message_
 
     // Inner hash: H((K' ⊕ ipad) || m)
     uint8_t *inner_data = malloc(HMAC_BLOCK_SIZE + message_len);
+    if (inner_data == NULL) {
+        print_debug("Memory allocation failed in compute_hmac");
+        return -1;
+    }
     memcpy(inner_data, k_ipad, HMAC_BLOCK_SIZE);
     memcpy(inner_data + HMAC_BLOCK_SIZE, message, message_len);
     hash(inner_data, HMAC_BLOCK_SIZE + message_len, inner_hash);
@@ -140,6 +142,10 @@ int compute_hmac(uint8_t *key, size_t key_len, uint8_t *message, size_t message_
 
     // Outer hash: H((K' ⊕ opad) || inner_hash)
     uint8_t *outer_data = malloc(HMAC_BLOCK_SIZE + HASH_SIZE);
+    if (outer_data == NULL) {
+        print_debug("Memory allocation failed in compute_hmac");
+        return -1;
+    }
     memcpy(outer_data, k_opad, HMAC_BLOCK_SIZE);
     memcpy(outer_data + HMAC_BLOCK_SIZE, inner_hash, HASH_SIZE);
     hash(outer_data, HMAC_BLOCK_SIZE + HASH_SIZE, hmac_output);
