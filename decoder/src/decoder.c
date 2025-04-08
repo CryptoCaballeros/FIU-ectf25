@@ -332,8 +332,6 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     secure_clear(key_bytes, SUBSCRIPTION_KEY_SIZE);
     secure_clear(device_key_input, device_key_input_size);
 
-    print_debug("Verifying subscription signature...\n");
-
     // Verify the signature in constant time
     if (constant_time_memcmp(computed_hash, update->signature, HASH_SIZE) != 0) {
         // IPS DELAYS 5 SECONDS ON INVALID SIGNATURE
@@ -342,8 +340,6 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
         print_error("Failed to update subscription - invalid signature\n");
         return -1;
     }
-
-    print_debug("Signature verified successfully\n");
 
     // Find the first empty slot or existing subscripiton in the subscription array for this channel
     for (i = 0; i < MAX_CHANNEL_COUNT; i++) {
@@ -447,13 +443,8 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     //CHECKS IF SECURITY CHECKS PASSED
 
     // Check that we are subscribed to the channel...
-    print_debug("Checking subscription\n");
     if (is_subscribed(channel)) {
-        print_debug("Subscription Valid\n");
-
-        print_debug("Checking timestamp\n");
         if (timestamp_valid(timestamp, channel)) {
-            print_debug("Timestamp Valid\n");
             prev_frame_timestamp = timestamp;
         } else {
             //timestamp errors are printed in timestamp_valid()
@@ -461,7 +452,6 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
         }
 
         // Before writing the bytes, decrypt
-        print_debug("Decrypting Frame\n");
         uint8_t decrypted_data[FRAME_SIZE];
         int decrypted_size;
 
@@ -475,7 +465,6 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
             return -1;
         }
         secure_clear(encryption_key, ENCRYPTION_KEY_SIZE); // clear encryption key
-        print_debug("Decryption Complete\n");
         write_packet(DECODE_MSG, decrypted_data, FRAME_SIZE); // 
         return 0;
     } else {
@@ -557,7 +546,6 @@ int main(void) {
 
     // process commands forever
     while (1) {
-        print_debug("Ready\n");
 
         STATUS_LED_GREEN();
 
