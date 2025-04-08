@@ -1,6 +1,6 @@
 # FIU eCTF 25' Installation Instructions
 
-## Layout s
+## Layout
 
 - `decoder/` - Firmware for the television decoder.
     - `project.mk` - This file defines project specific variables included in the Makefile
@@ -8,6 +8,7 @@
     - `Dockerfile` - Describes the build environment used by eCTF build tools.
     - `inc/` - Directory with c header files
     - `src/` - Directory with c source files
+    - `scripts/` - Directory with python scripts for decode to access keys
     - `wolfssl/` - Location to place wolfssl library for included Crypto Example
 - `design/` - Host design elements
     - `ectf25_design/` - Host design source code

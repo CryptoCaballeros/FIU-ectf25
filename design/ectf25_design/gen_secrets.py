@@ -19,23 +19,26 @@ def gen_secrets(channels: list[int]) -> bytes:
     This will be passed to the Encoder, ectf25_design.gen_subscription, and the build
     process of the decoder
 
+    Secrets stored in JSON files cannot be stored as binary values, 
+    they must be encoded to hex, base64, or another type of ASCII-only encoding
+
     :param channels: List of channel numbers that will be valid in this deployment.
         Channel 0 is the emergency broadcast, which will always be valid and will
         NOT be included in this list
 
     :returns: Contents of the secrets file
     """
-    # Secrets stored in JSON files cannot be stored as binary values, 
-    # they must be encoded to hex, base64, or another type of ASCII-only encoding
 
     # Key created for encrypting frames in encoder;
-    # random 32 byte value is converted to hex (64 digits)
+    # random 32 byte value is converted to hex (64 hex/128 bits)
     encryption_key = os.urandom(32).hex()
 
     # Key created for subscription signing or other subscription securing work;
-    # random 32 byte value is converted to hex (64 digits)
+    # random 32 byte value is converted to hex (64 hex/128 bits)
     subscription_key = os.urandom(32).hex()
 
+    # Key created for HMAC in encoder;
+    # random 32 byte value is converted to hex (64 hex/128 bits)
     MAC_key = os.urandom(32).hex()
 
     # Create the secrets object
