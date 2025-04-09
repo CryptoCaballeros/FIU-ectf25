@@ -7,60 +7,107 @@ Extract cryptographic keys from the secrets file and generate a C header file,
 to be used in decoder processes.
 This script is intended to be run during the Docker build process.
 """
-import json
 import os
 import sys
+import traceback
+import json
+import glob
+from pathlib import Path
 
-# Path to the secrets file mounted in the Docker container
-SECRETS_FILE = "/secrets/secrets.json"
-# Output header file path
-OUTPUT_HEADER = "/decoder/inc/secret_keys.h"
+# Comprehensive debugging output
+def print_debug_info():
+    print(f"Python version: {sys.version}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Script location: {os.path.abspath(__file__)}")
+    print(f"Environment variables: {dict(os.environ)}")
+    print(f"Root directory contents: {os.listdir('/')}")
+    
+    # Search for potential secrets files in common locations
+    for search_path in ['/', '/secrets', '/global.secrets', '/decoder']:
+        if os.path.exists(search_path):
+            print(f"Contents of {search_path}:")
+            for item in os.listdir(search_path):
+                full_path = os.path.join(search_path, item)
+                file_type = "directory" if os.path.isdir(full_path) else "file"
+                size = os.path.getsize(full_path) if os.path.isfile(full_path) else "-"
+                print(f"  {item} ({file_type}, {size} bytes)")
 
-def main():
+# Function to discover potential secrets files
+def find_secrets_files():
+    """Search for candidate secrets files in multiple locations"""
+    candidate_paths = []
+    
+    # Check environment variable first
+    env_path = os.environ.get("SECRETS_PATH")
+    if env_path and os.path.exists(env_path):
+        candidate_paths.append(env_path)
+        print(f"Found secrets path from environment: {env_path}")
+    
+    # Check common mount points
+    for base_path in ['/secrets', '/global.secrets', '/']:
+        if not os.path.exists(base_path):
+            continue
+            
+        # Look for JSON files
+        for json_file in glob.glob(f"{base_path}/*.json"):
+            candidate_paths.append(json_file)
+            
+        # Look for BIN files
+        for bin_file in glob.glob(f"{base_path}/*.bin"):
+            candidate_paths.append(bin_file)
+            
+        # Look for files without extensions that might be JSON
+        for file_path in os.listdir(base_path):
+            full_path = os.path.join(base_path, file_path)
+            if os.path.isfile(full_path) and '.' not in file_path:
+                candidate_paths.append(full_path)
+    
+    return candidate_paths
+
+# Function to try parsing a file as JSON
+def try_parse_json(file_path):
+    """Attempt to parse a file as JSON, return None if fails"""
     try:
-        # Get device ID from environment variable
-        device_id_hex = os.environ.get('DECODER_ID', '0x0')
-        device_id = int(device_id_hex, 16)
-        print(f"Using device ID: {device_id_hex}")
-        
-        # Read and parse the secrets JSON file
-        print(f"Reading secrets from {SECRETS_FILE}")
-        with open(SECRETS_FILE, 'r') as f:
-            secrets_data = json.load(f)
-        
-        # Extract the subscription key
-        subscription_key_hex = secrets_data.get('subscription_Key')
-        if not subscription_key_hex:
-            print(f"Error: Could not find 'subscription_Key' in {SECRETS_FILE}")
-            print(f"Available keys: {list(secrets_data.keys())}")
-            return 1
-        
-        # Extract encryption key
-        encryption_key_hex = secrets_data.get('encryption_Key')
-        if not encryption_key_hex:
-            print(f"Error: Could not find 'encryption_key' in {SECRETS_FILE}")
-            return 1
+        with open(file_path, 'rb') as f:
+            content = f.read()
+            # Try direct JSON parsing
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                # Try decoding with different encodings
+                for encoding in ['utf-8', 'latin-1']:
+                    try:
+                        return json.loads(content.decode(encoding))
+                    except:
+                        pass
+    except Exception as e:
+        print(f"Cannot parse {file_path}: {e}")
+    return None
 
-        # Extract MAC key
-        mac_key_hex = secrets_data.get('MAC_Key')
-        if not mac_key_hex:
-            print(f"Error: Could not find 'MAC_key' in {SECRETS_FILE}")
-
-        print(f"Successfully extracted keys: sub-{subscription_key_hex[:8]}..., enc-{encryption_key_hex[:8]}..., MAC-{mac_key_hex[:8]}...")
+# Function to create C header file from key data
+def generate_header_file(data, output_path):
+    """Generate C header file containing keys from JSON data"""
+    try:
+        # Extract keys (adjust based on your actual key names)
+        keys_to_extract = {
+            "encryption_Key": "ENCRYPTION_KEY",
+            "subscription_Key": "SUBSCRIPTION_KEY", 
+            "MAC_Key": "MAC_KEY"
+        }
         
-        # Convert hex string to bytes
-        subscription_key = bytes.fromhex(subscription_key_hex)
-        encryption_key = bytes.fromhex(encryption_key_hex)
-        mac_key = bytes.fromhex(mac_key_hex)
+        extracted_keys = {}
+        for json_key, header_name in keys_to_extract.items():
+            if json_key in data:
+                # Convert from hex to bytes for representation as C array
+                key_bytes = bytes.fromhex(data[json_key])
+                extracted_keys[header_name] = key_bytes
         
-        # Generate the header file
-        with open(OUTPUT_HEADER, 'w') as f:
-            # File header with documentation
+        # Generate header file
+        with open(output_path, 'w') as f:
             f.write("/**\n")
             f.write(" * @file secret_keys.h\n")
-            f.write(" * @author Crypto Caballeros\n")
+            f.write(" * @author Auto-generated from secrets\n")
             f.write(" * @brief File containing cryptographic keys\n")
-            f.write(" * @Date 2025\n")
             f.write(" */\n\n")
             
             # Include guards
@@ -69,172 +116,111 @@ def main():
             
             # Required includes
             f.write("#include <stdint.h>\n\n")
-
+            
             f.write("/****************************** Define Keys *******************************/\n\n")
             
-            # Define the subscription key as a byte array
-            f.write("/**\n")
-            f.write(" * Subscription key extracted from secrets.json\n")
-            f.write(" */\n")
-            f.write("static const uint8_t SUBSCRIPTION_KEY[] = {\n    ")
+            # Write each key as a byte array
+            for name, key_bytes in extracted_keys.items():
+                f.write(f"/**\n * {name} extracted from secrets\n */\n")
+                f.write(f"static const uint8_t {name}[] = {{\n    ")
+                
+                # Format bytes in rows of 8 for readability
+                bytes_str = []
+                for i, b in enumerate(key_bytes):
+                    if i > 0 and i % 8 == 0:
+                        bytes_str.append("\n    ")
+                    bytes_str.append(f"0x{b:02x}")
+                    if i < len(key_bytes) - 1:
+                        bytes_str.append(", ")
+                
+                f.write("".join(bytes_str))
+                f.write("\n};\n\n")
             
-            # Format the bytes into rows of 8 for readability
-            bytes_str = []
-            for i, b in enumerate(subscription_key):
-                if i > 0 and i % 8 == 0:
-                    bytes_str.append("\n    ")
-                bytes_str.append(f"0x{b:02x}")
-                if i < len(subscription_key) - 1:
-                    bytes_str.append(", ")
+            # Define key sizes
+            f.write("/****************************** Define Key Sizes *******************************/\n\n")
+            for name in extracted_keys.keys():
+                f.write(f"#define {name}_SIZE (sizeof({name}))\n\n")
             
-            f.write("".join(bytes_str))
-            f.write("\n};\n\n")
-
-            # Define Encryption key as a byte array
-            f.write("/**\n")
-            f.write(" * Encryption key extracted from secrets.json\n")
-            f.write(" */\n")
-            f.write("static const uint8_t ENCRYPTION_KEY[] = {\n    ")
-
-            # Format the bytes into rows of 8 for readability
-            bytes_str = []
-            for i, b in enumerate(encryption_key):
-                if i > 0 and i % 8 == 0:
-                    bytes_str.append("\n    ")
-                bytes_str.append(f"0x{b:02x}")
-                if i < len(encryption_key) - 1:
-                    bytes_str.append(", ")
+            # Add standard utility functions
+            f.write("/****************************** Utility Functions *******************************/\n\n")
             
-            f.write("".join(bytes_str))
-            f.write("\n};\n\n")
-
+            # Add key loading functions
+            for name in extracted_keys.keys():
+                f.write(f"static inline void load_{name.lower()}(uint8_t *key_buffer) {{\n")
+                f.write(f"    for (int i = 0; i < {name}_SIZE; i++) {{\n")
+                f.write(f"        key_buffer[i] = {name}[i];\n")
+                f.write("    }\n")
+                f.write("}\n\n")
             
-            # Define MAC key as a byte array
-            f.write("/**\n")
-            f.write(" * MAC key extracted from secrets.json\n")
-            f.write(" */\n")
-            f.write("static const uint8_t MAC_KEY[] = {\n    ")
-
-            # Format the bytes into rows of 8 for readability
-            bytes_str = []
-            for i, b in enumerate(mac_key):
-                if i > 0 and i % 8 == 0:
-                    bytes_str.append("\n    ")
-                bytes_str.append(f"0x{b:02x}")
-                if i < len(mac_key) - 1:
-                    bytes_str.append(", ")
-            
-            f.write("".join(bytes_str))
-            f.write("\n};\n\n")
-
-
-            f.write("/***************************** Define Key Sizes *****************************/\n\n")
-            
-            # Define the key size constants
-            f.write("#define SUBSCRIPTION_KEY_SIZE (sizeof(SUBSCRIPTION_KEY))\n\n")
-            f.write("#define ENCRYPTION_KEY_SIZE (sizeof(ENCRYPTION_KEY))\n\n")
-            f.write("#define MAC_KEY_SIZE (sizeof(MAC_KEY))\n\n")
-            
-            
-            f.write("/*************************** Extraction Functions ****************************/\n\n")
-
-
-            # Add the load_subscription_key function for convenience
-            f.write("/** @brief Loads the entire subscription key into a buffer\n")
-            f.write(" * \n")
-            f.write(" * @param key_buffer Buffer to receive the key (must be at least SUBSCRIPTION_KEY_SIZE bytes)\n")
-            f.write(" */\n")
-            f.write("static inline void load_subscription_key(uint8_t *key_buffer) {\n")
-            f.write("    for (int i = 0; i < SUBSCRIPTION_KEY_SIZE; i++) {\n")
-            f.write("        key_buffer[i] = SUBSCRIPTION_KEY[i];\n")
-            f.write("    }\n")
-            f.write("}\n\n")
-
-            f.write("/** @brief Loads the entire encryption key into a buffer\n")
-            f.write(" * \n")
-            f.write(" * @param key_buffer Buffer to receive the key (must be at least ENCRYPTION_KEY_SIZE bytes)\n")
-            f.write(" */\n")
-            f.write("static inline void load_encryption_key(uint8_t *key_buffer) {\n")
-            f.write("    for (int i = 0; i < ENCRYPTION_KEY_SIZE; i++) {\n")
-            f.write("        key_buffer[i] = ENCRYPTION_KEY[i];\n")
-            f.write("    }\n")
-            f.write("}\n\n")
-
-            f.write("/** @brief Loads the entire MAC key into a buffer\n")
-            f.write(" * \n")
-            f.write(" * @param key_buffer Buffer to receive the key (must be at least MAC_KEY_SIZE bytes)\n")
-            f.write(" */\n")
-            f.write("static inline void load_MAC_key(uint8_t *key_buffer) {\n")
-            f.write("    for (int i = 0; i < MAC_KEY_SIZE; i++) {\n")
-            f.write("        key_buffer[i] = MAC_KEY[i];\n")
-            f.write("    }\n")
-            f.write("}\n\n")
-            
-            f.write("/*************************** Deletion Functions ****************************/\n\n")
-
-            # A utility function for securely clearing sensitive data
-            f.write("/** @brief Securely clears a memory buffer (e.g., after using a key)\n")
-            f.write(" * \n")
-            f.write(" * @param buffer The buffer to clear\n")
-            f.write(" * @param size The size of the buffer in bytes\n")
-            f.write(" */\n")
+            # Add secure clear function
             f.write("static inline void secure_clear(volatile uint8_t *buffer, size_t size) {\n")
-            f.write("    // Prevent compiler optomization\n")
             f.write("    if (buffer == NULL || size == 0) {\n")
             f.write("        return;\n")
-            f.write("    }\n")
-            f.write("\n")
-            f.write("    // Multiple pass overwrite with different patterns\n")
-            f.write("    volatile uint8_t *p;\n")
-            f.write("\n")
-            f.write("    // First pass: 0xFF\n")
+            f.write("    }\n\n")
+            f.write("    volatile uint8_t *p;\n\n")
             f.write("    p = buffer;\n")
             f.write("    for (size_t i = 0; i < size; i++) {\n")
             f.write("        *p++ = 0xFF;\n")
-            f.write("    }\n")
-            f.write("\n")
-            f.write("    // Memory barrier to prevent reordering\n")
-            f.write("    __asm__ volatile (\"\" : : : \"memory\");\n")
-            f.write("\n")
-            f.write("    // Second pass: 0x00\n")
+            f.write("    }\n\n")
+            f.write("    __asm__ volatile (\"\" : : : \"memory\");\n\n")
             f.write("    p = buffer;\n")
             f.write("    for (size_t i = 0; i < size; i++) {\n")
             f.write("        *p++ = 0x00;\n")
-            f.write("    }\n")
-            f.write("\n")
-            f.write("    // Final memory barrier\n")
+            f.write("    }\n\n")
             f.write("    __asm__ volatile (\"\" : : : \"memory\");\n")
             f.write("}\n\n")
             
-            # Close the include guard
+            # Close include guard
             f.write("#endif // __SECRET_KEYS_H\n")
         
-        print(f"Successfully generated {OUTPUT_HEADER}")
-        return 0
-    
-    except FileNotFoundError:
-        print(f"Error: Could not find secrets file at {SECRETS_FILE}")
-        print(f"Current directory: {os.getcwd()}")
-        if os.path.exists("/secrets"):
-            print(f"Contents of /secrets directory: {os.listdir('/secrets')}")
-        return 1
-    
-    except json.JSONDecodeError as e:
-        print(f"Error: Invalid JSON in secrets file: {e}")
-        # Try to print the problematic content
-        try:
-            with open(SECRETS_FILE, 'r') as f:
-                content = f.read()
-                print(f"File content (first 100 chars): {repr(content[:100])}")
-        except:
-            print("Could not read file contents for debugging")
-        return 1
-    
+        print(f"Successfully generated header file at {output_path}")
+        return True
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
-        import traceback
+        print(f"Error generating header: {e}")
         traceback.print_exc()
-        return 1
+        return False
+
+def main():
+    """Main function to extract keys and generate header"""
+    print("Starting enhanced key extraction process...")
+    
+    # Print comprehensive debug info
+    print_debug_info()
+    
+    # Output file path
+    output_header = "/decoder/inc/secret_keys.h"
+    os.makedirs(os.path.dirname(output_header), exist_ok=True)
+    
+    # Find candidate secrets files
+    candidate_files = find_secrets_files()
+    print(f"Found {len(candidate_files)} candidate files: {candidate_files}")
+    
+    # Try each file until we find one that works
+    for file_path in candidate_files:
+        print(f"Attempting to parse: {file_path}")
+        data = try_parse_json(file_path)
+        if data:
+            print(f"Successfully parsed {file_path}")
+            if generate_header_file(data, output_header):
+                print("Key extraction completed successfully!")
+                return 0
+    
+    # Handle binary files if JSON parsing failed
+    # This would need customization based on your binary format
+    print("JSON parsing failed, will try .bin files...")
+    bin_files = [f for f in candidate_files if f.endswith('.bin')]
+    if bin_files:
+        print(f"Found {len(bin_files)} .bin files to try")
+        # Custom handling for .bin files would go here
+        # This requires knowledge of the binary format structure
+    
+    print("ERROR: Could not find or parse any valid secrets file")
+    return 1
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as e:
+        print(f"Unhandled exception: {e}")
+        traceback.print_exc()
+        sys.exit(1)

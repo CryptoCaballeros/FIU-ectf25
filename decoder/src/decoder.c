@@ -426,7 +426,7 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
 
     // Get MAC key from secrets
     uint8_t mac_key [MAC_KEY_SIZE];
-    load_MAC_key(mac_key);
+    load_mac_key(mac_key);
 
     // Compute HMAC
     compute_hmac(mac_key, MAC_KEY_SIZE, hmac_input, sizeof(hmac_input), computed_hmac);
