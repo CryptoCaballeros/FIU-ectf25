@@ -16,7 +16,10 @@ import struct
 import json
 import hmac
 import hashlib
-from wolfcrypt.ciphers import Aes
+# from wolfcrypt.ciphers import Aes
+# import aes
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad
 
 
 
@@ -61,11 +64,11 @@ class Encoder:
         iv = urandom(16)   # 16 bytes for AES block size
 
         # Use stored encryption key
-        aes = Aes(self.encryption_key, 2, iv) # AES-256
+        aes = AES.new(self.encryption_key, AES.MODE_CBC, iv) # AES-256
 
         # Pad and encrypt frame data
-        padding_length = 16 - (len(frame) % 16)
-        padded_data = frame + (b'\x00' * padding_length)
+        # padding_length = 16 - (len(frame) % 16)
+        padded_data = pad(frame, AES.block_size)
         ciphertext = aes.encrypt(padded_data)
 
         # Generate HMAC for authentication
