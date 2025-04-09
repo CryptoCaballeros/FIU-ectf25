@@ -8,26 +8,22 @@
 #ifndef WOLFSSL_USER_SETTINGS_H
 #define WOLFSSL_USER_SETTINGS_H
 
-// Security enhancements
-#define TFM_TIMING_RESISTANT       // Constant-time math operations
-#define ECC_TIMING_RESISTANT       // ECC operations protected against timing attacks
-#define HAVE_CONSTANT_TIME_IMPL    // Use constant-time implementations where available
-
-// Memory/performance optimizations for embedded systems
-#define WOLFSSL_SMALL_STACK        // Use less stack space
-#define WOLFSSL_NO_MALLOC          // Avoid dynamic memory allocation
-#define USE_FAST_MATH              // More efficient math implementation
-
-// Specific cipher configurations for your use case
-#define HAVE_AES_CBC               // You're using CBC mode
-#define AES_MAX_KEY_SIZE 32        // Support 256-bit keys
-#define NO_OLD_TLS                 // Disable older TLS versions
-#define NO_DSA                     // Disable DSA algorithms
-#define WOLFSSL_NO_SIGALGS         // Disable signature algorithms
-
-// Add HMAC optimizations
-#define HAVE_HKDF                  // Enable HKDF for key derivation
-#define WOLFSSL_SHA384             // Enable SHA-384 (stronger alternative)
+// Disable everything except SHA-256
+// #define NO_AES
+#define NO_DES3
+#define NO_RC4
+#define NO_RSA
+#define NO_DSA
+#define NO_DH
+#define NO_HMAC
+#define NO_MD5
+#define NO_MD4
+#define NO_SHA
+#define WOLFSSL_SHA256
+#define NO_FILESYSTEM
+#define NO_OLD_TLS
+#define NO_ASN
+#define NO_SESSION_CACHE
 
 #endif /* WOLFSSL_USER_SETTINGS_H */
 
@@ -35,7 +31,7 @@
 // #define WOLFSSL_CONFIG_H
 
 // /* Core WolfSSL configuration */
-// #define SINGLE_THREADED     /* No threading support needed */
+#define SINGLE_THREADED     /* No threading support needed */
 // #define NO_FILESYSTEM
 // #define NO_WRITEV           /* Embedded system without writev() */
 // #define WOLFSSL_NO_CURRDIR  /* Don't use current directory */
@@ -49,7 +45,7 @@
 // #define WORD64_MASK 0xFFFFFFFFFFFFFFFF
 
 // /* Algorithm selection */
-// #define WOLFSSL_AES_DIRECT    /* Direct AES operations */
+#define WOLFSSL_AES_DIRECT    /* Direct AES operations */
 // #define WOLFSSL_SHA256        /* Enables SHA 256 hash functions*/
 // #define NO_RC4                /* Disable unused algorithms */
 // #define NO_HC128
@@ -73,7 +69,7 @@
 // #define TFM_NO_ASM              /* Avoid assembly optimizations that might have timing variations */
 
 // /* Specific algorithm hardening */
-// #define AES_COUNTER_ONLY         /* AES in counter mode only, which is more resistant */
-// #define GCM_TABLE_4BIT           /* Use smaller tables for AES-GCM to reduce cache footprint */
+#define AES_COUNTER_ONLY         /* AES in counter mode only, which is more resistant */
+#define GCM_TABLE_4BIT           /* Use smaller tables for AES-GCM to reduce cache footprint */
 
 // #endif /* WOLFSSL_CONFIG_H */
