@@ -158,8 +158,6 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
     }
     // ensure timestamp is increasing monotonically
     if (timestamp <= prev_frame_timestamp) {
-        // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Timestamp invalid - non-monotonic.");
         return 0;
@@ -172,9 +170,6 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
                 return 1;
             }
             else {
-                // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
-                // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
-                MXC_Delay(MXC_DELAY_MSEC(5000));
                 STATUS_LED_ERROR();
                 print_error("Timestamp invalid - outside of subscription window.");
                 return 0;
@@ -263,7 +258,6 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     // Verify this update is for this decoder
     if (update->decoder_id != DECODER_ID) {
         // IPS DELAYS 5 SECONDS ON INVALID DECODER
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Failed to update subscription - wrong decoder ID\n");
         return -1;
@@ -308,8 +302,6 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
         char error_buf[64];
         sprintf(error_buf, "WolfSSL hash returned error: %d", hash_result);
         print_debug(error_buf);
-        // Delay and return error
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Failed to update subscription - hash computation error\n");
         return -1;
@@ -322,8 +314,6 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
         char error_buf[64];
         sprintf(error_buf, "WolfSSL hash returned error: %d", hash_result);
         print_debug(error_buf);
-        // Delay and return error
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Failed to update subscription - hash computation error\n");
         return -1;
@@ -469,8 +459,6 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
         write_packet(DECODE_MSG, decrypted_data, FRAME_SIZE); // 
         return 0;
     } else {
-        // IPS DELAYS 5 SECONDS ON INVALID SUBSCRIPTION
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         sprintf(
             output_buf,
