@@ -28,13 +28,16 @@ LINKERFILE=firmware.ld
 STARTUPFILE=startup_firmware.S
 ENTRY=firmware_startup
 
-# ****************** eCTF Wolfssl Crypto *******************
+# ****************** eCTF Crypto *******************
 
-# In decoder/project.mk
+# wolfSSL file paths
 VPATH += wolfssl/wolfcrypt/src
 IPATH += wolfssl
 
 # Minimal wolfSSL settings
 PROJ_CFLAGS += -DWOLFSSL_USER_SETTINGS
+PROJ_CFLAGS += -DCRYPTO_HW_ENABLED=1
+PROJ_CFLAGS += -DNO_WOLFSSL_DIR
 
+# Hardware settings
 PROJ_CFLAGS += -DUSE_HW_CRYPTO

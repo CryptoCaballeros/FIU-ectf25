@@ -273,7 +273,7 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
    //  not able to be subscribed to since it is an emergency channel
    
     if (update->channel == EMERGENCY_CHANNEL) {
-        STATUS_LED_RED();
+        STATUS_LED_ERROR();
         print_error("Failed to update subscription - cannot subscribe to emergency channel\n");
         return -1;
     }
@@ -369,7 +369,7 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
 
     // If we do not have any room for more subscriptions
     if (i == MAX_CHANNEL_COUNT) {
-        STATUS_LED_RED();
+        STATUS_LED_ERROR();
         print_error("Failed to update subscription - max subscriptions installed\n");
         return -1;
     }
@@ -416,6 +416,12 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
         MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Packet too small to contain authentication tag\n");
+        return -1;
+    }
+
+    if (ciphertext_size > 80 || ciphertext_size < 80) {
+        STATUS_LED_ERROR();
+        print_error("Invalid ciphertext size\n");
         return -1;
     }
 
@@ -602,7 +608,7 @@ int main(void) {
         // Handle bad command
         default:
             STATUS_LED_ERROR();
-            sprintf(output_buf, "Invalid Command: %c\n", cmd);
+            snprintf(output_buf, sizeof(output_buf), "Invalid Command: %c\n", cmd);
             print_error(output_buf);
             break;
         }

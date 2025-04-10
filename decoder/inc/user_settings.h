@@ -71,5 +71,8 @@
 // /* Specific algorithm hardening */
 #define AES_COUNTER_ONLY         /* AES in counter mode only, which is more resistant */
 #define GCM_TABLE_4BIT           /* Use smaller tables for AES-GCM to reduce cache footprint */
+// # PROJ_CFLAGS += -HAVE_PK_CALLBACKS                                                               
+// # PROJ_CFLAGS += -WOLFSSL_USER_IO                                                                 
+// # PROJ_CFLAGS += -NO_WRITEV -DTIME_T_NOT_64BIT  
 
 // #endif /* WOLFSSL_CONFIG_H */
