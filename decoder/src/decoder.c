@@ -243,15 +243,21 @@ static int constant_time_memcmp(const void* a, const void* b, size_t len) {
  * 
  */
 static void add_power_noise(void) {
+    
+
     // Create volatile buffers that won't be optimized out by compiler
     volatile uint8_t noise_buffer[32];
     volatile uint8_t result_buffer[32];
     
+    MXC_TRNG_Init();
+
     // Use hardware TRNG to get random data
     for (int i = 0; i < sizeof(noise_buffer); i++) {
         MXC_TRNG_Random((uint8_t*)&noise_buffer[i], 1);
     }
     
+    MXC_TRNG_Shutdown();
+
     // Perform dummy arithmetic operations that consume power in a data-independent manner
     for (int i = 0; i < sizeof(noise_buffer); i++) {
         // Mix operations that consume different power
@@ -259,14 +265,17 @@ static void add_power_noise(void) {
         result_buffer[i] += (noise_buffer[(i+7) % sizeof(noise_buffer)] & 0xAA);
         result_buffer[i] *= (noise_buffer[(i+13) % sizeof(noise_buffer)] | 0x33);
         
+
         // Add compiler memory barriers to prevent optimization
         __asm__ volatile("" : : : "memory");
         
+
         // Ensure variable number of operations to create timing jitter
         uint8_t iterations = (noise_buffer[i] & 0x07) + 1;
         for (uint8_t j = 0; j < iterations; j++) {
             result_buffer[i] ^= (result_buffer[(i+j) % sizeof(result_buffer)] + j);
         }
+
     }
     
     // Force use of results to prevent compiler optimizations
@@ -588,6 +597,7 @@ void init() {
 
     // Initialize the flash peripheral to enable access to persistent memory
     flash_simple_init();
+
 
     // Read starting flash values into our flash status struct
     flash_simple_read(FLASH_STATUS_ADDR, &decoder_status, sizeof(flash_entry_t));
