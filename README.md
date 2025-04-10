@@ -1,4 +1,4 @@
-# FIU eCTF 2025 - Satellite TV System
+# FIU eCTF 2025 - Satellite TV System 📺
 
 ## Table of Contents
 - [Overview](#overview)
@@ -150,7 +150,10 @@ python -m ectf25.utils.flash ./decoder/build_out/max78000.bin /dev/tty.usbmodem1
 python -m ectf25.utils.flash .\decoder\build_out\max78000.bin COM12
 ```
 
-### Using the Host Tools
+### Using the Host Tools 
+
+![HammerToolsGIF](https://github.com/user-attachments/assets/448f12e2-dadf-4623-b070-c814ec8065e4)
+
 
 > **NOTE** All arguments for these tools can be found within their files, within a function titled "parse_args()."
 
@@ -227,7 +230,10 @@ python -m ectf.utils.stress_test decode COM12 frames\encoded_frames.json
 ```
 This will decode all frames from encoded_frames.json
 
-### Running the Complete System
+### Running the Complete System 
+
+![ItsAReallyGoodSystemWeGotGoingOnHereClintusMcgintusGIF](https://github.com/user-attachments/assets/f2f3d0e1-6594-4a36-ae70-eebb1b706014)
+
 
 To run the full system, you need to start three components in sequence (in order):
 
