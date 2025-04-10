@@ -382,10 +382,11 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     uint8_t device_id_bytes[sizeof(decoder_id_t)]; // buffer for device id
     memcpy(device_id_bytes, &update->decoder_id, sizeof(decoder_id_t));
 
+    add_power_noise();
     // Create device-specific key input buffer
     uint32_t device_key_input_size = SUBSCRIPTION_KEY_SIZE + sizeof(decoder_id_t);
     uint8_t device_key_input[SUBSCRIPTION_KEY_SIZE + sizeof(decoder_id_t)];
-
+    add_power_noise();
     // Initialize device key input 
     memset(device_key_input, 0, device_key_input_size);
     memcpy(device_key_input, key_bytes, SUBSCRIPTION_KEY_SIZE); // Copy data
@@ -394,8 +395,10 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     // Hash to create device key (master key + device ID)
     memset(device_key, 0, HASH_SIZE);
     int hash_result = hash(device_key_input, device_key_input_size, device_key);
+    add_power_noise();
 
     if (hash_result != 0) {
+        add_power_noise();
         char error_buf[64];
         sprintf(error_buf, "WolfSSL hash returned error: %d", hash_result);
         print_debug(error_buf);
@@ -506,7 +509,8 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     unsigned char *ciphertext = new_frame->data; // Extract Ciphertext
     unsigned char *auth_tag = new_frame->auth_tag; // Extract auth_tag (HMAC)
 
-    // Verify HMAC first
+    // Verify HMAC 
+    add_power_noise();
     uint8_t computed_hmac[HASH_SIZE];
     uint8_t hmac_input[sizeof(channel_id_t) + sizeof(timestamp_t) + 16 + ciphertext_size];
 
@@ -524,7 +528,7 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
 
 
     // Get MAC key from secrets
-
+    add_power_noise();
     uint8_t mac_key [MAC_KEY_SIZE];
     load_mac_key(mac_key);
     add_power_noise();
