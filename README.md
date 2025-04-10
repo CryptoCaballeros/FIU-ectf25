@@ -25,7 +25,7 @@
 
 ## Overview
 
-This repository contains the implementation of a secure Satellite TV System for the MITRE eCTF 2025 competition. The system consists of three main components: an Encoder, a Satellite, and a Decoder. The Encoder encodes and encrypts TV frames, the Satellite broadcasts the encoded frames, and the Decoder decrypts and decodes the frames for viewing on authorized TVs.
+This repository contains the implementation of a secure Satellite TV System for the MITRE eCTF 2025 competition. The system consists of three main components: an Encoder, a Satellite, and a Decoder. The Encoder encodes and encrypts TV frames, the Satellite broadcasts the encoded frames, and the Decoder decrypts and decodes the frames for viewing on authorized TVs. This README will explain how to setup and use the properties of this system with some sample code.
 
 ## Repository Structure
 
@@ -136,6 +136,23 @@ python -m ectf25_design.gen_subscription secrets/secrets.json subscription.bin 0
 
 This creates a subscription file targeting a device with ID 0xDEADBEEF, with a subscription window from timestamp 32 to 128 for channel 1.
 
+```
+python -m ectf25_design.gen_subscription -h
+usage: gen_subscription.py [-h] [--force] secrets_file subscription_file device_id start end channel
+
+positional arguments:
+  secrets_file       Path to the secrets file created by ectf25_design.gen_secrets
+  subscription_file  Subscription output
+  device_id          Device ID of the update recipient.
+  start              Subscription start timestamp
+  end                Subscription end timestamp
+  channel            Channel to subscribe to
+
+options:
+  -h, --help         show this help message and exit
+  --force, -f        Force creation of subscription file, overwriting existing file
+```
+
 ### Flashing the Decoder
 
 Flash the built firmware to your MAX78000 hardware. The device must be in update mode (flashing blue LED):
@@ -149,13 +166,24 @@ python -m ectf25.utils.flash ./decoder/build_out/max78000.bin /dev/tty.usbmodem1
 ```powershell
 python -m ectf25.utils.flash .\decoder\build_out\max78000.bin COM12
 ```
+```
+python -m ectf25.utils.flash -h
+usage: ectf25.utils.flash [-h] infile port
+
+positional arguments:
+  infile      Path to the input binary
+  port        Serial port
+
+options:
+  -h, --help  show this help message and exit
+```
 
 ### Using the Host Tools 
 
 ![HammerToolsGIF](https://github.com/user-attachments/assets/448f12e2-dadf-4623-b070-c814ec8065e4)
 
 
-> **NOTE** All arguments for these tools can be found within their files, within a function titled "parse_args()."
+> **NOTE** All arguments for these tools can be found within their files, within a function titled "parse_args()." You can also type the command with a -h at the end to get get a prompt with all arguments in tyour temrminal.
 
 #### List Tool
 
@@ -167,6 +195,16 @@ python -m ectf25.tv.list /dev/tty.usbmodem11302
 
 # PowerShell
 python -m ectf25.tv.list COM12
+```
+
+```
+python -m ectf25.tv.list -h
+usage: ectf25.tv.list [-h] port
+positional arguments:
+  port        Serial port to the Decoder (see https://rules.ectf.mitre.org/2025/getting_started/boot_reference for platform-specific instructions)
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 #### Subscription Update Tool
@@ -182,6 +220,20 @@ python -m ectf25.tv.subscribe subscription.bin COM12
 ```
 
 This will subscribe the decoder on connected to specified port to the subscription written to subscription.bin
+
+```
+python -m ectf25.tv.subscribe -h
+usage: ectf25.tv.subscribe [-h] subscription_file port
+
+Updates a Decoder's subscription.
+
+positional arguments:
+  subscription_file  Path to the subscription file created by ectf25_design.gen_subscription
+  port               Serial port to the Decoder (see https://rules.ectf.mitre.org/2025/getting_started/boot_reference for platform-specific instructions)
+
+options:
+  -h, --help         show this help message and exit
+```
 
 #### Testing tools
 
@@ -201,6 +253,36 @@ python -m ectf25.utils.tester --port COM12 -s secrets\secrets.json rand -c 1 -f 
 
 This will encode and decode randomly generated 64-byte frames on channel 1.
 
+```
+python -m ectf25.utils.tester -h
+usage: ectf25.dev.tester [-h] [--secrets SECRETS] [--port PORT] [--delay DELAY] [--perf]
+                         [--stub-encoder] [--stub-decoder] [--dump-raw DUMP_RAW]
+                         [--dump-encoded DUMP_ENCODED] [--dump-decoded DUMP_DECODED]
+                         {stdin,rand,json} ...
+
+positional arguments:
+  {stdin,rand,json}
+    stdin               Read frames from stdin
+    rand                Generate random frames
+    json                Read frames from a json file like [[channel, frame, timestamp], ...]
+
+options:
+  -h, --help            show this help message and exit
+  --secrets SECRETS, -s SECRETS
+                        Path to the secrets file
+  --port PORT, -p PORT  Serial port to the Decoder (See https://rules.ectf.mitre.org/2025/getting_started/boot_reference for platform-specific instructions)
+  --delay DELAY, -d DELAY
+                        Delay after frame decoding
+  --perf                Display performance stats
+  --stub-encoder        Stub out encoder and pass frames directly to decoder
+  --stub-decoder        Stub out decoder and print decoded frames
+  --dump-raw DUMP_RAW   Dump raw frames to a file
+  --dump-encoded DUMP_ENCODED
+                        Dump encoded frames to a file
+  --dump-decoded DUMP_DECODED
+                        Dump decoded frames to a file
+```
+
 ##### Stability Test Tool
 
 Test frame encoding and decoding functionality w/ performance statistics (i.e. FPS, timing fails, failure rate, total decodes) through a single channel, in which a subscription is provided:
@@ -211,6 +293,24 @@ python -m ectf25.utils.stability_test -p COM12  -g secrets\secrets.json -c 1 -di
 ```
 
 This will encoded random frames (using secrets from secrets.json) on channel 1, for a device named 0xdeadbeef connected to port 12, for 240 minutes (4 hours), and a subscription to channel 1 is provided.
+
+```
+python -m ectf25.stability_test -h
+usage: ectf25.utils.stability_test [-h] --port PORT --global-secrets SECRETS                                                     --channel CHANNEL --decoder-id DECODER ID
+                                   --results-file FILENAME --duration MINUTES --subscribe
+
+positional arguments:
+-p PORT, --port PORT               Decoder serial port
+-g, --global-secrets               Path to global secrets
+-c, --channel                      Channel to test on
+-di, --decoder-id                  Decoder ID
+-r, --results-file                 File where results will be stored
+-d, --duration                     Duration of the test in minutes
+-s, --subscribe                    Provide a subscription (to chosen channel)                   
+
+options:
+-h, --help                         show this help message and exit
+```
 
 ##### Stress Test Tool
 
@@ -228,7 +328,27 @@ This will encode 10,000 random 64-byte frames (using secrets.json) and dump thes
 # Powershell
 python -m ectf.utils.stress_test decode COM12 frames\encoded_frames.json
 ```
-This will decode all frames from encoded_frames.json
+This will decode all frames from encoded_frames.json at port COM12
+
+```
+python -m ectf25.utils.stress_test -h
+usage: python -m ectf25.utils.stress_test [-h] [-f FRAMESIZE] [-t BYTES]                                                                     [--channels CHANNELS] {encode, decoder}       
+                                               secrets SECRETS --dump FILENAME port frames
+
+positional arguments:
+encode                                         Test the encoder
+decode                                         Test the decoder
+
+options:
+frames                                         JSON list of base64-encoded frames (can be created by encoder test)
+port                                           Serial port to the Decoder
+secrets SECRETS                                Path to the secrets file
+--dump FILENAME                                Filename of the encoded frames
+--frame-size FRAME SIZE, -f FRAME SIZE         Size of frame
+--test-size BYTES, -t BYTES                    Bytes to process
+--channels CHANNELS, -c CHANNELS               Channels to randomly chose from (NOTE 0 os broadcast)
+-h, --help                                     show this help message and exit
+```
 
 ### Running the Complete System 
 
@@ -245,7 +365,21 @@ Start the uplink in one terminal:
 # Linux/PowerShell
 python -m ectf25.uplink secrets/secrets.json localhost 2000 1:10:frames/x_c0.json
 ```
-> **Note:** This uses one of the sample frame files, and localhost must be used if your are running this locally
+> **Note:** This uses one of the sample frame files, and localhost must be used as host name if your are running this locally
+```
+python -m ectf25.uplink -h
+usage: __main__.py [-h] secrets host port channels [channels ...]
+
+positional arguments:
+  secrets     Path to the secrets file
+  host        TCP hostname to serve on
+  port        TCP port to serve on
+  channels    List of channel:fps:frames_file pairings (e.g., 1:10:channel1_frames.json
+              2:20:channel2_frames.json)
+
+options:
+  -h, --help  show this help message and exit
+```
 
 #### 2. Satellite
 
@@ -254,6 +388,19 @@ Start the satellite in another terminal:
 ```bash
 # Linux/PowerShell
 python -m ectf25.satellite localhost 2000 localhost 1:2001
+```
+```
+python -m ectf25.satellite -h
+usage: satellite.py [-h] up_host up_port down_host channels [channels ...]
+
+positional arguments:
+  up_host     Hostname for uplink
+  up_port     Port for uplink
+  down_host   Hostname for downlink
+  channels    List of channel:down_port pairings (e.g., 1:2001 2:2002)
+
+options:
+  -h, --help  show this help message and exit
 ```
 
 #### 3. TV
@@ -266,6 +413,19 @@ python -m ectf25.tv.run localhost 2001 /dev/tty.usbmodem11302
 
 # PowerShell
 python -m ectf25.tv.run localhost 2001 COM12
+```
+```
+python -m ectf25.tv.run -h
+usage: ectf25.tv.run [-h] [--baud BAUD] sat_host sat_port dec_port
+
+positional arguments:
+  sat_host     TCP host of the satellite
+  sat_port     TCP port of the satellite
+  dec_port     Serial port to the Decoder (see https://rules.ectf.mitre.org/2025/getting_started/boot_reference for platform-specific instructions)
+
+options:
+  -h, --help   show this help message and exit
+  --baud BAUD  Baud rate of the serial port
 ```
 
 ## Troubleshooting
