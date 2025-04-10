@@ -19,8 +19,6 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     binutils-arm-none-eabi \
     make \
     python3 \
-    # # this creates proper Python links
-    # python-is-python3 \  
     git \
     wget \
     libtool \
@@ -45,7 +43,7 @@ ENV MAXIM_PATH=/root/msdk-2024_02
 
 WORKDIR /decoder
 
-ENTRYPOINT ["bash", "-c", " set -x && mkdir -p /decoder/inc && python3 --version && /usr/bin/python3 /decoder/scripts/extract_keys.py && make release DECODER_ID=${DECODER_ID} && cp build/max78000.elf build/max78000.bin /out"]
+ENTRYPOINT ["bash", "-c", " set -x && mkdir -p /decoder/inc && python3 --version && python3 /decoder/scripts/extract_keys.py && make release DECODER_ID=${DECODER_ID} && cp build/max78000.elf build/max78000.bin /out"]
 
 # Sample run command:
 # docker run -v ./decoder/:/decoder -v ./global.secrets:/global.secrets:ro -v ./deadbeef_build:/out -e DECODER_ID=0xdeadbeef build-decoder

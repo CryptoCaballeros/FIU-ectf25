@@ -1,138 +1,77 @@
-/** @file "simple_crypto.c"
-*   @author Crypto Caballero
-*   @brief Source file holding cryptographic efforts performed by FIU's 2025 eCTF team.
-*   @date 2025
-*
-*/
+/*****FIU MITRE eCTF 2025********************************************
+*                                                                  *
+*    simple_crypto.c                                               *
+*                                                                  *
+*   Author: Crypto Caballeros                                      *
+*   Date: 2025                                                     *
+*   Description: Source file holding cryptographic efforts         *
+*        preformed by FIU's 2025 eCTF team                         *
+*                                                                  *
+*******************************************************************/
+
+
+
+/****************************INCLUDES*****************************/
 
 #include <stdint.h>
 #include <string.h>
 #include "simple_crypto.h"
 #include "host_messaging.h"
- 
-// MAX78000 Hardware includes
-#include "aes.h"   // AES Hardware
-
-// Using wolfSSL for SHA-256
+#include "secret_keys.h"
+// Using wolfSSL for SHA-256 & AES
 #include "wolfssl/wolfcrypt/sha256.h"
- 
-// Global variables for crypto contexts
-static int crypto_initialized = 0;
- 
-/** @brief Initialize the cryptographic hardware
-*/
-int crypto_init(void) {
-    if (crypto_initialized) {
-        return 0; // Already initialized
-    }
-    
-    int result;
-    
-    // Initialize AES hardware
-    result = MXC_AES_Init();
-    if (result != E_NO_ERROR) {
-        char debug_buf[64];
-        sprintf(debug_buf, "AES initialization failed with code %d", result);
-        print_debug(debug_buf);
-        return -1;
-    }
-    
-    // Initialize TRNG hardware
-    result = MXC_TRNG_Init();
-    if (result != E_NO_ERROR) {
-        char debug_buf[64];
-        sprintf(debug_buf, "TRNG initialization failed with code %d", result);
-        print_debug(debug_buf);
-        return -2;
-    }
-     
-    crypto_initialized = 1;
-    print_debug("Cryptographic hardware initialized successfully");
-    return 0;
-}
+#include <wolfssl/wolfcrypt/aes.h>
+#include "trng.h"
 
-/**
- * @brief Decrypt data using AES-CBC mode
- * 
- * @param ciphertext Input ciphertext data
- * @param len Length of data (must be multiple of BLOCK_SIZE)
- * @param key Decryption key
- * @param iv Initialization vector (16 bytes)
- * @param plaintext Output buffer for plaintext
- * 
- * @return 0 on success, negative value on error
- */
-int decrypt_sym_cbc(uint8_t *ciphertext, size_t len, uint8_t *key, uint8_t *iv, uint8_t *plaintext) {
-    char debug_buf[128];
-    
-    // Ensure crypto hardware is initialized
-    if (!crypto_initialized) {
-        int result = crypto_init();
-        if (result != 0) {
-            return result;
-        }
+/***********************************************************************************************************
+ @brief AES Decryption function using wolfSSL
+ 
+  @param ciphertext A pointer to a buffer of length ciphertext_len containing ciphertext from encoder
+  @param ciphertext_len Legth of ciphertext
+  @param key A pointer to a buffer containing the encryption key to be used in AES
+  @param iv A pointer to a buffer containing the Initialization vector (IV) to be used in AES
+  @param plaintext A pointer to a buffer containing the output of decryption, plaintext
+ 
+  @return plaintext_len for error messages
+ ************************************************************************************************************/
+int aes_decrypt(uint8_t* ciphertext, int ciphertext_len, unsigned char* key, unsigned char* iv, uint8_t* plaintext) {
+    Aes aes;
+    int ret;
+
+    ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
+    if (ret != 0) return -1;
+
+    ret = wc_AesSetKey(&aes, key, ENCRYPTION_KEY_SIZE, iv, AES_DECRYPTION);
+    if (ret != 0) return -1;
+
+    ret = wc_AesCbcDecrypt(&aes, plaintext, ciphertext, ciphertext_len);
+    if (ret != 0) return -1;
+
+    // Remove padding
+    int plaintext_len = ciphertext_len;
+    while (plaintext_len > 0 && plaintext[plaintext_len-1] == 0) {
+    plaintext_len--;
     }
-    
-    // Ensure valid length
-    if (len <= 0 || len % BLOCK_SIZE != 0) {
-        print_debug("Invalid length for decryption");
-        return -1;
-    }
-    
-    // Set up AES request structure for ECB mode
-    mxc_aes_req_t aes_req;
-    aes_req.keySize = MXC_AES_128BITS;  // Using AES-128
-    
-    // Copy key to AES key register
-    MXC_AES_SetExtKey(key, aes_req.keySize);
-    
-    // Save the previous ciphertext block for XOR operation
-    uint8_t prev_block[BLOCK_SIZE];
-    memcpy(prev_block, iv, BLOCK_SIZE);  // Initialize with IV
-    
-    // Process each block in CBC mode
-    for (size_t i = 0; i < len; i += BLOCK_SIZE) {
-        // Save current ciphertext block for next iteration
-        uint8_t current_block[BLOCK_SIZE];
-        memcpy(current_block, ciphertext + i, BLOCK_SIZE);
-        
-        // Decrypt the current block using hardware ECB
-        aes_req.inputData = (uint32_t*)(ciphertext + i);
-        aes_req.resultData = (uint32_t*)(plaintext + i);
-        aes_req.length = BLOCK_SIZE;
-        
-        int result = MXC_AES_Decrypt(&aes_req);
-        if (result != E_NO_ERROR) {
-            sprintf(debug_buf, "AES decryption failed with code %d", result);
-            print_debug(debug_buf);
-            return -2;
-        }
-        
-        // XOR with previous ciphertext block (or IV for first block)
-        for (size_t j = 0; j < BLOCK_SIZE; j++) {
-            plaintext[i + j] ^= prev_block[j];
-        }
-        
-        // Update previous block for next iteration
-        memcpy(prev_block, current_block, BLOCK_SIZE);
-    }
-    
-    return 0;
+
+    wc_AesFree(&aes);
+    return plaintext_len;
 }
  
-/** @brief Hash data using wolfSSL SHA-256
- */
+/*******************************************************************************************************
+ *  @brief Hashes arbitrary-length data using wolfSSL SHA-256
+ *
+ *  @param data A pointer to a buffer of length len containing the data
+ *           to be hashed
+ *  @param len The length of the data to hash
+ *  @param hash_out A pointer to a buffer of length HASH_SIZE (32 bytes) where the resulting
+ *           hash output will be written to
+ *
+ *  @return 0 on success, non-zero for other error
+ *******************************************************************************************************/
 int hash(void *data, size_t len, uint8_t *hash_out) {
     char debug_buf[128];
     
-    // Ensure crypto hardware is initialized
-    if (!crypto_initialized) {
-        int result = crypto_init();
-        if (result != 0) {
-            return result;
-        }
-    }
-     
+    // Check that inputs are valid
     if (data == NULL) {
         print_debug("NULL data pointer passed to hash");
         return -1;
@@ -175,7 +114,8 @@ int hash(void *data, size_t len, uint8_t *hash_out) {
     return 0;
 }
 
-/** @brief Creates HMAC object using wolfSSL hash function
+/*******************************************************************************************************
+ *  @brief Creates HMAC object using wolfSSL hash function
  * 
  *  @param key A pointer to a buffer of length key_len containing key for HMAC
  *  @param key_len The length of the key to be used for HMAC
@@ -188,18 +128,12 @@ int hash(void *data, size_t len, uint8_t *hash_out) {
  *  @note Standard HMAC implementation (H is the hash function, K is the key)
  *  HMAC(K,m) = H((K' ⊕ opad) || H((K' ⊕ ipad) || m))
  *  where K' is the key padded to block size and m is the message
- */
+ ********************************************************************************************************/
 int compute_hmac(uint8_t *key, size_t key_len, uint8_t *message, size_t message_len, uint8_t *hmac_output) {
     uint8_t k_prime[HMAC_BLOCK_SIZE];
     uint8_t k_opad[HMAC_BLOCK_SIZE];
     uint8_t k_ipad[HMAC_BLOCK_SIZE];
     uint8_t inner_hash[HASH_SIZE];
-
-    // Debug original inputs
-    print_debug("HMAC Key (hex):");
-    print_hex_debug(key, key_len);
-    print_debug("HMAC Message (hex):");
-    print_hex_debug(message, message_len);
 
     // Prepare the key
     memset(k_prime, 0, HMAC_BLOCK_SIZE); // Initialize buffer
@@ -209,8 +143,6 @@ int compute_hmac(uint8_t *key, size_t key_len, uint8_t *message, size_t message_
         memcpy(k_prime, key, key_len);   // Copy into memory
     }
 
-    print_debug("k_prime:");
-    print_hex_debug(k_prime, key_len);
 
     // Prepare padded keys
     for (int i=0; i < HMAC_BLOCK_SIZE; i++) { // Pad with zeros if key < block size
@@ -218,39 +150,27 @@ int compute_hmac(uint8_t *key, size_t key_len, uint8_t *message, size_t message_
         k_ipad[i] = k_prime[i] ^ IPAD;
     }
 
-    print_debug("K XOR ipad:");
-    print_hex_debug(k_ipad, HMAC_BLOCK_SIZE);
-
     // Inner hash: H((K' ⊕ ipad) || m)
     uint8_t *inner_data = malloc(HMAC_BLOCK_SIZE + message_len);
+    if (inner_data == NULL) {
+        print_debug("Memory allocation failed in compute_hmac");
+        return -1;
+    }
     memcpy(inner_data, k_ipad, HMAC_BLOCK_SIZE);
     memcpy(inner_data + HMAC_BLOCK_SIZE, message, message_len);
-
-    print_debug("Inner data (K' ⊕ ipad || message):");
-    print_hex_debug(inner_data, HMAC_BLOCK_SIZE + message_len);
-
     hash(inner_data, HMAC_BLOCK_SIZE + message_len, inner_hash);
     free(inner_data);
 
-    print_debug("inner_hash:");
-    print_hex_debug(inner_hash, HASH_SIZE);
-
-    print_debug("K XOR opad:");
-    print_hex_debug(k_opad, HMAC_BLOCK_SIZE);
-
     // Outer hash: H((K' ⊕ opad) || inner_hash)
     uint8_t *outer_data = malloc(HMAC_BLOCK_SIZE + HASH_SIZE);
+    if (outer_data == NULL) {
+        print_debug("Memory allocation failed in compute_hmac");
+        return -1;
+    }
     memcpy(outer_data, k_opad, HMAC_BLOCK_SIZE);
     memcpy(outer_data + HMAC_BLOCK_SIZE, inner_hash, HASH_SIZE);
-
-    print_debug("Outer data (K' ⊕ opad || inner_hash):");
-    print_hex_debug(outer_data, HMAC_BLOCK_SIZE + HASH_SIZE);
-
     hash(outer_data, HMAC_BLOCK_SIZE + HASH_SIZE, hmac_output);
     free(outer_data);
-
-    print_debug("hmac_output:");
-    print_hex_debug(hmac_output, HASH_SIZE);
 
     return 0;
 }

@@ -1,11 +1,14 @@
-/**
- * @file    decoder.c
- * @author  Crypto Caballeros
- * @brief   eCTF 2025 Decoder's main source file 
- * @brief   eCTF 2025 Decoder's main source file 
- * @date    2025
- *
- */
+/*****FIU MITRE eCTF 2025********************************************
+*                                                                  *
+*    decoder.c                                                     *
+*                                                                  *
+*   Author: Crypto Caballeros                                      *
+*   Date: 2025                                                     *
+*   Description: This file processes and verifies incoming files   *
+*        to decode sattelite TV frames                             *
+*                                                                  *
+*******************************************************************/
+
 
 /*********************** INCLUDES *************************/
 #include <stdio.h>
@@ -20,10 +23,8 @@
 #include "simple_uart.h"
 #include "secret_keys.h"
 #include "user_settings.h"
-#include "secret_keys.h"
-#include "user_settings.h"
 #include "simple_crypto.h"
-#include <wolfssl/wolfcrypt/aes.h>
+#include "trng.h"
 
 /**********************************************************
  ******************* PRIMITIVE TYPES **********************
@@ -38,12 +39,15 @@
  *********************** CONSTANTS ************************
  **********************************************************/
 
+#define MAX_DECODER_ID_SIZE 8
 #define MAX_CHANNEL_COUNT 8
 #define EMERGENCY_CHANNEL 0
 #define FRAME_SIZE 64
 #define DEFAULT_CHANNEL_TIMESTAMP 0xFFFFFFFFFFFFFFFF
+
 // This is a canary value so we can confirm whether this decoder has booted before
 #define FLASH_FIRST_BOOT 0xDEADBEEF
+
 
 /**********************************************************
  ********************* STATE MACROS ***********************
@@ -57,52 +61,54 @@
  *********** COMMUNICATION PACKET DEFINITIONS *************
  **********************************************************/
 
-#pragma pack(push, 1) // Tells the compiler not to pad the struct members
-// for more information on what struct padding does, see:
-// https://www.gnu.org/software/c-intro-and-ref/manual/html_node/Structure-Layout.html
+
+// Tells the compiler not to pad the struct members
+#pragma pack(push, 1) 
+
 typedef struct {
-    channel_id_t channel;
-    timestamp_t timestamp;
-    uint8_t iv[16];                // Initialization Vector
+    channel_id_t channel;             // Channel Number
+    timestamp_t timestamp;           // Frame's timestamp
+    uint8_t iv[16];                 // Initialization Vector
     uint8_t auth_tag[HASH_SIZE];   // Buffer for authentication
-    uint8_t data[];              // Holds data frame data
+    uint8_t data[];               // Holds data frame data
 } frame_packet_t;
 
 typedef struct {
-    decoder_id_t decoder_id;
-    timestamp_t start_timestamp;
-    timestamp_t end_timestamp;
-    channel_id_t channel;
-    uint8_t signature[HASH_SIZE]; // Signature field from subscription signing
+    decoder_id_t decoder_id;            // Decoder ID
+    timestamp_t start_timestamp;       // Start of subscription window
+    timestamp_t end_timestamp;        // End of subscription window
+    channel_id_t channel;            // Channel number to subscribe to
+    uint8_t signature[HASH_SIZE];   // Signature field from subscription signing
 } subscription_update_packet_t;
 
 typedef struct {
-    channel_id_t channel;
-    timestamp_t start;
-    timestamp_t end;
+    channel_id_t channel;     // Channel number for subscription listing
+    timestamp_t start;       // Start timestamp for subscription listing
+    timestamp_t end;        // End timestamp for subscription listing
 } channel_info_t;
 
 typedef struct {
-    uint32_t n_channels;
-    channel_info_t channel_info[MAX_CHANNEL_COUNT];
+    uint32_t n_channels;                             // Counts number of channels subscribed to
+    channel_info_t channel_info[MAX_CHANNEL_COUNT]; // Points to channel's info (no more than 8 channels)
 } list_response_t;
 
-#pragma pack(pop) // Tells the compiler to resume padding struct members
+// Tells the compiler to resume padding struct members
+#pragma pack(pop) 
 
 /**********************************************************
  ******************** TYPE DEFINITIONS ********************
  **********************************************************/
 
 typedef struct {
-    bool active;
-    channel_id_t id;
-    timestamp_t start_timestamp;
-    timestamp_t end_timestamp;
+    bool active;                      // Determines that channel is active
+    channel_id_t id;                 // Channel ID
+    timestamp_t start_timestamp;    // Channel's start time
+    timestamp_t end_timestamp;     // Channel's End time
 } channel_status_t;
 
 typedef struct {
-    uint32_t first_boot; // if set to FLASH_FIRST_BOOT, device has booted before.
-    channel_status_t subscribed_channels[MAX_CHANNEL_COUNT];
+    uint32_t first_boot;    // if set to FLASH_FIRST_BOOT, device has booted before.
+    channel_status_t subscribed_channels[MAX_CHANNEL_COUNT]; // Points to subscribed channel info
 } flash_entry_t;
 
 /**********************************************************
@@ -112,7 +118,7 @@ typedef struct {
 // This is used to track decoder subscriptions
 flash_entry_t decoder_status;
 
-//previous frame timestamp for timestamp validation
+// Previous frame timestamp for timestamp validation
 timestamp_t prev_frame_timestamp = 0;
 
 
@@ -120,23 +126,21 @@ timestamp_t prev_frame_timestamp = 0;
  ******************* UTILITY FUNCTIONS ********************
  **********************************************************/
 
-/** @brief Checks whether the decoder is subscribed to a given channel
- *
- *  @param channel The channel number to be checked.
- *  @return 1 if the the decoder is subscribed to the channel.  0 if not.
-*/
+
+/***********************************************************************
+
+    @brief Checks whether the decoder is subscribed to a given channel
+ 
+    @param channel The channel number to be checked.
+  
+    @return 1 if the the decoder is subscribed to the channel.  0 if not.
+
+***********************************************************************/
 int is_subscribed(channel_id_t channel) {
     // Check if this is an emergency broadcast message
     if (channel == EMERGENCY_CHANNEL) {
         return 1;
     }
-    // // Check if the decoder has a subscription
-    // for (int i = 0; i < MAX_CHANNEL_COUNT; i++) {
-    //     if (decoder_status.subscribed_channels[i].id == channel && decoder_status.subscribed_channels[i].active) {
-    //         return 1;
-    //     }
-    // }
-    // return 0;
 
     // Constant-time subscription check
     int result = 0;
@@ -152,23 +156,25 @@ int is_subscribed(channel_id_t channel) {
     return result;
 }
 
-/** @brief Checks whether a frame timestamp is valid for the decoder's subscription to a given channel
- *
- *  @param timestamp The timestamp to be checked.
- *  @param channel The channel number to be checked.
- * 
- *  @return 1 if the timestamp is valid for the channel.  0 if not.
-*/
+/********************************************************************************************************* 
+
+   @brief Checks whether a frame timestamp is valid for the decoder's subscription to a given channel
+ 
+   @param timestamp The timestamp to be checked.
+   @param channel The channel number to be checked.
+  
+   @return 1 if the timestamp is valid for the channel.  0 if not.
+
+*********************************************************************************************************/
 int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
+
     // Check if this is an emergency broadcast message
     if (channel == EMERGENCY_CHANNEL) {
         return 1;
     }
+
     // ensure timestamp is increasing monotonically
     if (timestamp <= prev_frame_timestamp) {
-        // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
-        // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Timestamp invalid - non-monotonic.");
         return 0;
@@ -181,9 +187,6 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
                 return 1;
             }
             else {
-                // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
-                // IPS DELAYS 5 SECONDS ON INVALID TIMESTAMP
-                MXC_Delay(MXC_DELAY_MSEC(5000));
                 STATUS_LED_ERROR();
                 print_error("Timestamp invalid - outside of subscription window.");
                 return 0;
@@ -193,37 +196,96 @@ int timestamp_valid(timestamp_t timestamp, channel_id_t channel) {
     return 0;
 }
 
-/** @brief Performs a constant-time comparison of two buffers
- * 
- * @param a First buffer
- * @param b Second buffer
- * @param len Length of buffers to compare
- * 
- * @return 0 if equal, non-zero otherwise
- */
+/*****************************************************************************
+
+ @brief Performs a constant-time comparison of two buffers
+  
+ @param a First buffer
+ @param b Second buffer
+ @param len Length of buffers to compare
+  
+ @return 0 if equal, non-zero otherwise
+
+ *******************************************************************************/
 static int constant_time_memcmp(const void* a, const void* b, size_t len) {
     const unsigned char* pa = (const unsigned char*)a;
     const unsigned char* pb = (const unsigned char*)b;
     unsigned char result = 0;
 
     for (size_t i = 0; i < len; i++) {
-        /* XOR each byte and OR the results together
-           If all bytes are equal, result will be 0 */
+        // XOR each byte and OR the results together
+       //  If all bytes are equal, result will be 0 
         result |= pa[i] ^ pb[i];
     }
     
     return (result != 0);
 }
 
+/**********************************************************************************
+  @brief Add noise to power consumption to protect against power analysis attacks
+  
+  This function executes random operations to mask power analysis during sensitive/cryptographic operations.
+  
+ **********************************************************************************/
+static void add_power_noise(void) {
+    
+
+    // Create volatile buffers that won't be optimized out by compiler
+    volatile uint8_t noise_buffer[32];
+    volatile uint8_t result_buffer[32];
+    
+    MXC_TRNG_Init();
+
+    // Use hardware TRNG to get random data
+    for (int i = 0; i < sizeof(noise_buffer); i++) {
+        MXC_TRNG_Random((uint8_t*)&noise_buffer[i], 1);
+    }
+    
+    MXC_TRNG_Shutdown();
+
+    // Perform dummy arithmetic operations that consume power in a data-independent manner
+    for (int i = 0; i < sizeof(noise_buffer); i++) {
+        // Mix operations that consume different power
+        result_buffer[i] = (noise_buffer[i] ^ 0x55);
+        result_buffer[i] += (noise_buffer[(i+7) % sizeof(noise_buffer)] & 0xAA);
+        result_buffer[i] *= (noise_buffer[(i+13) % sizeof(noise_buffer)] | 0x33);
+        
+
+        // Add compiler memory barriers to prevent optimization
+        __asm__ volatile("" : : : "memory");
+        
+
+        // Ensure variable number of operations to create timing jitter
+        uint8_t iterations = (noise_buffer[i] & 0x07) + 1;
+        for (uint8_t j = 0; j < iterations; j++) {
+            result_buffer[i] ^= (result_buffer[(i+j) % sizeof(result_buffer)] + j);
+        }
+
+    }
+    
+    // Force use of results to prevent compiler optimizations
+    uint8_t checksum = 0;
+    for (int i = 0; i < sizeof(result_buffer); i++) {
+        checksum ^= result_buffer[i];
+    }
+    
+    // Use the checksum in a way that doesn't affect program logic
+    // but prevents the compiler from removing the code
+    if (checksum == 0xFF) {
+        // This branch almost never executes, but compiler can't prove it ;)
+        __asm__ volatile("nop");
+    }
+}
 
 /**********************************************************
  ********************* CORE FUNCTIONS *********************
  **********************************************************/
 
-/** @brief Lists out the actively subscribed channels over UART.
- *
- *  @return 0 if successful.
-*/
+/***************************************************************
+   @brief Lists out the actively subscribed channels over UART.
+
+   @return 0 if successful.
+***************************************************************/
 int list_channels() {
     list_response_t resp;
     pkt_len_t len;
@@ -247,49 +309,43 @@ int list_channels() {
 }
 
 
-/** @brief Updates the channel subscription for a subset of channels.
- *
- *  @param pkt_len The length of the incoming packet
- *  @param update A pointer to an array of channel_update structs,
- *      which contains the channel number, start, and end timestamps
- *      for each channel being updated.
- *
- *  @note Take care to note that this system is little endian.
- *
- *  @return 0 upon success. -1 if error.
-*/
+/***************************************************************************************
+
+  @brief Updates the channel subscription for a subset of channels.
+
+  @param pkt_len The length of the incoming packet
+  @param update A pointer to an array of channel_update structs,
+      which contains the channel number, start, and end timestamps
+      for each channel being updated.
+
+  @note Take care to note that this system is little endian.
+
+  @return 0 upon success. -1 if error.
+
+***************************************************************************************/
 int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update) {
     int i;
-    char debug_buf[128];
 
     // channel 0 is always available, 
-    // not able to be subscribed to since it is an emergency channel
+   //  not able to be subscribed to since it is an emergency channel
+   
     if (update->channel == EMERGENCY_CHANNEL) {
-        STATUS_LED_RED();
+        STATUS_LED_ERROR();
         print_error("Failed to update subscription - cannot subscribe to emergency channel\n");
         return -1;
     }
 
     // Verify this update is for this decoder
     if (update->decoder_id != DECODER_ID) {
-        // IPS DELAYS 5 SECONDS ON INVALID DECODER
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Failed to update subscription - wrong decoder ID\n");
         return -1;
     }
 
-    // Debug output
-    print_debug("\n=== C DEBUGGING VALUES ===");
-    sprintf(debug_buf, "Device ID (hex): 0x%08X", update->decoder_id);
-    print_debug(debug_buf);
-    sprintf(debug_buf, "Device ID (int): %u", update->decoder_id);
-    print_debug(debug_buf);
-
-    // Create a buffer with the subscription data to verify signature
+    // Create a buffer with the subscription data to compare with computed signature
     uint8_t verify_buffer[sizeof(decoder_id_t) + sizeof(timestamp_t) * 2 + sizeof(channel_id_t)];
-    uint8_t computed_hash[HASH_SIZE];
-    uint8_t device_key[HASH_SIZE];
+    uint8_t computed_hash[HASH_SIZE]; // Buffer for computed signature
+    uint8_t device_key[HASH_SIZE]; // Buffer for device key
 
     // Copy data into verification buffer (all data except the siganture)
     memcpy(verify_buffer, &update->decoder_id, sizeof(decoder_id_t));
@@ -300,92 +356,70 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     memcpy(verify_buffer + sizeof(decoder_id_t) + sizeof(timestamp_t) * 2,
         &update->channel, sizeof(channel_id_t));
 
-    print_debug("Data Buffer (hex):");
-    print_hex_debug(verify_buffer, sizeof(verify_buffer));
-
-    // Get subscription/master key using the load_subscription_key function
+    // Get subscription/master key using the load_subscription_key 
+    add_power_noise();
     uint8_t key_bytes[SUBSCRIPTION_KEY_SIZE];
     load_subscription_key(key_bytes);
-
-    print_debug("Master Key (hex):");
-    print_hex_debug(key_bytes, SUBSCRIPTION_KEY_SIZE);
-
+    add_power_noise();
+    // TODO: should any of this before HMAC have power noise?
     // Convert device ID to bytes (similar to Python format)
     uint8_t device_id_bytes[sizeof(decoder_id_t)]; // buffer for device id
     memcpy(device_id_bytes, &update->decoder_id, sizeof(decoder_id_t));
 
-    print_debug("Device ID Bytes (hex):");
-    print_hex_debug(device_id_bytes, sizeof(device_id_bytes));
-
+    add_power_noise();
     // Create device-specific key input buffer
     uint32_t device_key_input_size = SUBSCRIPTION_KEY_SIZE + sizeof(decoder_id_t);
     uint8_t device_key_input[SUBSCRIPTION_KEY_SIZE + sizeof(decoder_id_t)];
-
+    add_power_noise();
     // Initialize device key input 
     memset(device_key_input, 0, device_key_input_size);
-
-    // Copy data
-    memcpy(device_key_input, key_bytes, SUBSCRIPTION_KEY_SIZE);
+    memcpy(device_key_input, key_bytes, SUBSCRIPTION_KEY_SIZE); // Copy data
     memcpy(device_key_input + SUBSCRIPTION_KEY_SIZE, device_id_bytes, sizeof(decoder_id_t));
-
-    print_debug("Device Key Input (hex):");
-    print_hex_debug(device_key_input, device_key_input_size);
-    sprintf(debug_buf, "Device Key Input Length: %u", device_key_input_size);
-    print_debug(debug_buf);
+    secure_zero_memory(key_bytes, SUBSCRIPTION_KEY_SIZE);
 
     // Hash to create device key (master key + device ID)
     memset(device_key, 0, HASH_SIZE);
     int hash_result = hash(device_key_input, device_key_input_size, device_key);
+    add_power_noise();
 
+    // Securely clear the key from memory when done
+    secure_zero_memory(device_key_input, device_key_input_size);
     if (hash_result != 0) {
+        add_power_noise();
         char error_buf[64];
         sprintf(error_buf, "WolfSSL hash returned error: %d", hash_result);
         print_debug(error_buf);
-        // Delay and return error
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Failed to update subscription - hash computation error\n");
         return -1;
     }
-    print_debug("Device Key (hex):");
-    print_hex_debug(device_key, HASH_SIZE);
 
     // Compute HMAC: H((device key ⊕ opad) || H((device key ⊕ ipad) || verify buffer))
+    add_power_noise();
     hash_result = compute_hmac(device_key, HASH_SIZE, verify_buffer, sizeof(verify_buffer), computed_hash);
 
     if (hash_result != 0) {
+        add_power_noise();
         char error_buf[64];
         sprintf(error_buf, "WolfSSL hash returned error: %d", hash_result);
         print_debug(error_buf);
-        // Delay and return error
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Failed to update subscription - hash computation error\n");
         return -1;
     }
 
-    print_debug("computed Signature (hex):");
-    print_hex_debug(computed_hash, HASH_SIZE);
-    print_debug("Expected Signature (hex):");
-    print_hex_debug(update->signature, HASH_SIZE);
-    print_debug("=== END C DEBUGGING ===\n");
+    add_power_noise();
 
-    // Securely clear the key from memory when done
-    secure_clear(key_bytes, SUBSCRIPTION_KEY_SIZE);
-    secure_clear(device_key_input, device_key_input_size);
-
-    print_debug("Verifying subscription signature...\n");
-
-    // Verify the signature in constant time
+    // Verify the computed signature in constant time
     if (constant_time_memcmp(computed_hash, update->signature, HASH_SIZE) != 0) {
+
         // IPS DELAYS 5 SECONDS ON INVALID SIGNATURE
         MXC_Delay(MXC_DELAY_MSEC(5000));
+
         STATUS_LED_ERROR();
         print_error("Failed to update subscription - invalid signature\n");
         return -1;
     }
-
-    print_debug("Signature verified successfully\n");
 
     // Find the first empty slot or existing subscripiton in the subscription array for this channel
     for (i = 0; i < MAX_CHANNEL_COUNT; i++) {
@@ -400,9 +434,7 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
 
     // If we do not have any room for more subscriptions
     if (i == MAX_CHANNEL_COUNT) {
-        //IPS DELAYS 5 SECONDS ON MAX SUBSCRIPTIONS
-        MXC_Delay(MXC_DELAY_MSEC(5000));
-        STATUS_LED_RED();
+        STATUS_LED_ERROR();
         print_error("Failed to update subscription - max subscriptions installed\n");
         return -1;
     }
@@ -417,81 +449,32 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     return 0;
 }
 
-/** @brief AES Decryption function using wolfSSL
- * 
- *  @param ciphertext
- *  @param ciphertext_len
- *  @param key
- *  @param iv
- *  @param plaintext
- * 
- *  @return plaintext_len to be compared
- */
-int aes_decrypt(uint8_t* ciphertext, int ciphertext_len, 
-                unsigned char* key, unsigned char* iv, 
-                uint8_t* plaintext) {
-    Aes aes;
-    int ret;
-    
-    ret = wc_AesInit(&aes, NULL, INVALID_DEVID);
-    if (ret != 0) return -1;
-    
-    ret = wc_AesSetKey(&aes, key, ENCRYPTION_KEY_SIZE, iv, AES_DECRYPTION);
-    if (ret != 0) return -1;
-    
-    ret = wc_AesCbcDecrypt(&aes, plaintext, ciphertext, ciphertext_len);
-    if (ret != 0) return -1;
-    
-    // Remove padding
-    int plaintext_len = ciphertext_len;
-    while (plaintext_len > 0 && plaintext[plaintext_len-1] == 0) {
-        plaintext_len--;
-    }
-    
-    wc_AesFree(&aes);
-    return plaintext_len;
-}
 
-/** @brief Processes a packet containing frame data.
- *
- *  @param pkt_len A pointer to the incoming packet.
- *  @param new_frame A pointer to the incoming packet.
- *
- *  @return 0 if successful.  -1 if data is from unsubscribed channel.
-*/
+/**********************************************************************
+  @brief Processes a packet containing frame data.
+ 
+  @param pkt_len A pointer to the incoming packet.
+  @param new_frame A pointer to the incoming packet.
+ 
+  @return 0 if successful.  -1 if data is from unsubscribed channel.
+
+*********************************************************************/
 int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     char output_buf[128] = {0};
-    char debug_buf[128];
 
     // Declaring variables for new frame
     channel_id_t channel = new_frame->channel; // channel of new frame
     timestamp_t timestamp = new_frame->timestamp; // timestamp of new frame
 
-    // Add debug output
-    sprintf(output_buf, "Receiving frame for channel: %u with timestamp: %llu", 
-            channel, (unsigned long long)timestamp);
-    print_debug(output_buf);
-
-    print_debug("\n===== RAW PACKET DATA =====");
-    print_hex_debug((uint8_t*)new_frame, pkt_len);
-    print_debug("===== END RAW PACKET DATA =====\n");
-
     // Calculate Components' Sizes
-    print_debug("Packet structure analysis:");
-    sprintf(debug_buf, "Total packet length: %u bytes", pkt_len);
-    print_debug(debug_buf);
 
     // Header size - Ciphertext size - data
     uint16_t header_size = sizeof(new_frame->channel) 
                         + sizeof(new_frame->timestamp) 
                         + sizeof(new_frame->iv) + sizeof(new_frame->auth_tag);
-    sprintf(debug_buf, "Header size: %u bytes", header_size);
-    print_debug(debug_buf);
     // Ciphertext size - the size of the packet minus 
     // the size of non-frame elements (header)
     uint16_t ciphertext_size = pkt_len - header_size;
-    sprintf(debug_buf, "Calculated ciphertext size: %u bytes", ciphertext_size);
-    print_debug(debug_buf);
 
     // Validate total packet length
     if (pkt_len < header_size) {
@@ -501,108 +484,91 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
         return -1;
     }
 
+    if (ciphertext_size > 80 || ciphertext_size < 80) {
+        STATUS_LED_ERROR();
+        print_error("Invalid ciphertext size\n");
+        return -1;
+    }
+
     // Extract Components
     unsigned char *iv = new_frame->iv; // Extract IV (16 bytes)
     unsigned char *ciphertext = new_frame->data; // Extract Ciphertext
     unsigned char *auth_tag = new_frame->auth_tag; // Extract auth_tag (HMAC)
 
-    // Dump memory locations for debugging
-    sprintf(debug_buf, "Frame packet starts at: %p", new_frame);
-    print_debug(debug_buf);
-    sprintf(debug_buf, "IV starts at: %p", iv);
-    print_debug(debug_buf);
-    sprintf(debug_buf, "Auth tag should start at: %p", auth_tag);
-    print_debug(debug_buf);
-    sprintf(debug_buf, "Data starts at: %p", ciphertext);
-    print_debug(debug_buf);
+    // FIRST, VERIFY HMAC
+    add_power_noise();
+    // Create HMAC buffers
     
-    // Dump auth tag content
-    print_debug("Auth tag content (hex):");
-    print_hex_debug(auth_tag, HASH_SIZE);
-
-    // Verify HMAC first
     uint8_t computed_hmac[HASH_SIZE];
     uint8_t hmac_input[sizeof(channel_id_t) + sizeof(timestamp_t) + 16 + ciphertext_size];
 
     // Construct data in same manner as HMAC in encoder
+    add_power_noise();
     memcpy(hmac_input, &new_frame->channel, sizeof(channel_id_t));
     memcpy(hmac_input + sizeof(channel_id_t), &new_frame->timestamp, sizeof(timestamp_t));
     memcpy(hmac_input + sizeof(channel_id_t) + sizeof(timestamp_t), iv, 16);
     memcpy(hmac_input + sizeof(channel_id_t) + sizeof(timestamp_t) + 16, ciphertext, ciphertext_size);
 
-    // Debug hmac input
-    print_debug("hmac_input:");
-    print_hex_debug(hmac_input, sizeof(hmac_input));
-
-    // Get encryption key from secrets
-    uint8_t encryption_key[ENCRYPTION_KEY_SIZE];
-    load_encryption_key(encryption_key);
-    print_debug("encryption_key:");
-    print_hex_debug(encryption_key, ENCRYPTION_KEY_SIZE);
-
     // Get MAC key from secrets
+    add_power_noise();
     uint8_t mac_key [MAC_KEY_SIZE];
-    load_MAC_key(mac_key);
-    print_debug("MAC_key: ");
-    print_hex_debug(mac_key, MAC_KEY_SIZE);
+    load_mac_key(mac_key);
+    add_power_noise();
 
     // Compute HMAC
     compute_hmac(mac_key, MAC_KEY_SIZE, hmac_input, sizeof(hmac_input), computed_hmac);
-
-    // Debug key_input & computed hmac
-    print_debug("Computed_hash:");
-    print_hex_debug(computed_hmac, sizeof(computed_hmac));
-    print_debug("auth_tag:");
-    print_hex_debug(auth_tag, HASH_SIZE);
-
+    secure_zero_memory(mac_key, MAC_KEY_SIZE); // Clear mac key buffer
 
     // Verify HMAC in constant time
     if (constant_time_memcmp(computed_hmac, auth_tag, HASH_SIZE) != 0) {
-        secure_clear(mac_key, MAC_KEY_SIZE);
+        // IPS DELAYS 5 SECONDS ON INVALID SIGNATURE
         MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         print_error("Failed to authenticate frame - invalid signature\n");
         return -1;
     } 
-    secure_clear(mac_key, MAC_KEY_SIZE); // clear mac key buffer
     
-    //CHECKS IF SECURITY CHECKS PASSED
+    //CHECKS IF OTHER SECURITY CHECKS PASS
 
     // Check that we are subscribed to the channel...
-    print_debug("Checking subscription\n");
     if (is_subscribed(channel)) {
-        print_debug("Subscription Valid\n");
-
-        print_debug("Checking timestamp\n");
+        // Check that frame timestamp is valid
         if (timestamp_valid(timestamp, channel)) {
-            print_debug("Timestamp Valid\n");
             prev_frame_timestamp = timestamp;
         } else {
-            //timestamp errors are printed in timestamp_valid()
+            //timestamp errors are printed in timestamp_valid() function
             return -1;
         }
 
-        // Before writing the bytes, decrypt
-        print_debug("Decrypting Frame\n");
+        // FINALLY, DECRYPT
+
+        // Create decryption buffer
         uint8_t decrypted_data[FRAME_SIZE];
         int decrypted_size;
 
+        // Get Encryption key from secrets
+        add_power_noise();
+        uint8_t encryption_key [ENCRYPTION_KEY_SIZE];
+        load_encryption_key(encryption_key);
+        add_power_noise();
+
         decrypted_size = aes_decrypt(ciphertext, ciphertext_size, encryption_key, iv, decrypted_data);
+        secure_zero_memory(encryption_key, ENCRYPTION_KEY_SIZE); // Clear encryption key buffer
         if (decrypted_size < 0) {
-            secure_clear(encryption_key, ENCRYPTION_KEY_SIZE); // clear encryption key
+            add_power_noise();
             // IPS DELAYS 5 SECONDS ON DECRYPTION FAILURE
             MXC_Delay(MXC_DELAY_MSEC(5000));
+
             STATUS_LED_ERROR();
             print_error("Decryption failed\n");
             return -1;
         }
-        secure_clear(encryption_key, ENCRYPTION_KEY_SIZE); // clear encryption key
-        print_debug("Decryption Complete\n");
-        write_packet(DECODE_MSG, decrypted_data, FRAME_SIZE); // 
+        add_power_noise();
+        // Write decoded frame to host computer (TV)
+        write_packet(DECODE_MSG, decrypted_data, FRAME_SIZE);
         return 0;
+
     } else {
-        // IPS DELAYS 5 SECONDS ON INVALID SUBSCRIPTION
-        MXC_Delay(MXC_DELAY_MSEC(5000));
         STATUS_LED_ERROR();
         sprintf(
             output_buf,
@@ -612,13 +578,13 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
     }
 }
 
-/** @brief Initializes peripherals for system boot.
-*/
+// @brief Initializes peripherals for system boot.
 void init() {
     int ret;
 
     // Initialize the flash peripheral to enable access to persistent memory
     flash_simple_init();
+
 
     // Read starting flash values into our flash status struct
     flash_simple_read(FLASH_STATUS_ADDR, &decoder_status, sizeof(flash_entry_t));
@@ -655,7 +621,8 @@ void init() {
         while (1);
     }
 
-    if (sizeof(decoder_id_t) > 8) {
+    // Checks if decoder ID is not the correct length (<8)
+    if (sizeof(decoder_id_t) > MAX_DECODER_ID_SIZE) {
         MXC_Delay(MXC_DELAY_MSEC(5000));
         print_error("Warning: Unexpected device ID size detected\n");
     }
@@ -679,7 +646,6 @@ int main(void) {
 
     // process commands forever
     while (1) {
-        print_debug("Ready\n");
 
         STATUS_LED_GREEN();
 
@@ -715,7 +681,7 @@ int main(void) {
         // Handle bad command
         default:
             STATUS_LED_ERROR();
-            sprintf(output_buf, "Invalid Command: %c\n", cmd);
+            snprintf(output_buf, sizeof(output_buf), "Invalid Command: %c\n", cmd);
             print_error(output_buf);
             break;
         }

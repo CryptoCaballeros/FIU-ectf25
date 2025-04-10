@@ -6,8 +6,6 @@
 # https://analog-devices-msdk.github.io/msdk/USERGUIDE/#build-system
 
 MXC_OPTIMIZE_CFLAGS = -Og
-# ^ For example, you can uncomment this line to 
-# optimize the project for debugging
 
 # **********************************************************
 
@@ -28,13 +26,17 @@ LINKERFILE=firmware.ld
 STARTUPFILE=startup_firmware.S
 ENTRY=firmware_startup
 
-# ****************** eCTF Wolfssl Crypto *******************
+# ****************** eCTF Crypto *******************
 
-# In decoder/project.mk
+# wolfSSL file paths
 VPATH += wolfssl/wolfcrypt/src
 IPATH += wolfssl
 
-# Minimal wolfSSL settings
+# Minimal wolfSSL settings - rest of settings in user_settings.h
 PROJ_CFLAGS += -DWOLFSSL_USER_SETTINGS
+PROJ_CFLAGS += -DNO_WOLFSSL_DIR
+PROJ_CFLAGS += -DNO_INLINE
 
+# Hardware settings
 PROJ_CFLAGS += -DUSE_HW_CRYPTO
+PROJ_CFLAGS += -DCRYPTO_HW_ENABLED=1

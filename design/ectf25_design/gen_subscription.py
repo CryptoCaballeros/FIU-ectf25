@@ -1,8 +1,14 @@
 """
-Author: Crypto Caballeros
-Date: 2025
-
-This file generates subscriptions to be used in a satllite TV system.
+*****FIU MITRE eCTF 2025********************************************
+*                                                                  *
+*    gen_subscriptions.py                                          *
+*                                                                  *
+*   Author: Crypto Caballeros                                      *
+*   Date: 2025                                                     *
+*   Description: This file generates subscriptions to be used in   *
+*       the sattelite TV system                                    *
+*                                                                  *
+********************************************************************
 """
 
 import argparse
@@ -36,12 +42,6 @@ def gen_subscription(
     # Extract the subscription key from secrets
     master_key = bytes.fromhex(secrets["subscription_Key"])
 
-    # Debug output
-    print("\n=== PYTHON DEBUGGING VALUES ===")
-    print(f"Device ID (hex): 0x{device_id:08X}")
-    print(f"Device ID (int): {device_id}")
-    print(f"Master Key (hex): {master_key.hex()}")
-
     # Check if requested channel is valid
     if channel not in secrets["channels"] and channel != 0:
         logger.error(f"Channel {channel} is not a valid channel in this deployment. Valid channels are: {secrets['channels']}")
@@ -50,21 +50,16 @@ def gen_subscription(
     # Create data buffer to be signed (device_id, start time, end time, channel)
     # for subscription (packaged)
     data_buffer = struct.pack("<IQQI", device_id, start, end, channel)
-    print(f"Data Buffer (hex): {data_buffer.hex()}")
 
     # Determine device ID size and convert to bytes (little-endian)
     device_id_bytes = struct.pack("<I", device_id)
-    print(f"Device ID Bytes (hex): {device_id_bytes.hex()}")
 
     # Create input for device key
     device_key_input = master_key + device_id_bytes
-    print(f"Device Key Input (hex): {device_key_input.hex()}")
-    print(f"Device Key Input Length: {len(device_key_input)}")
 
     # Hash to create device key
     # Ensures valid decoder & system
     device_key = hashlib.sha256(device_key_input).digest() 
-    print(f"Device Key (hex): {device_key.hex()}")
 
     # Standard HMAC implementation
     def generate_hmac_signature(key, data):
@@ -73,9 +68,6 @@ def gen_subscription(
     # Generate Signature = H((device_key ⊕ opad) || H((device_key ⊕ ipad) || data_buffer))
     # Signature will be decyphered if decoder is valid
     signature = generate_hmac_signature(device_key, data_buffer)
-    print(f"Signature (hex): {signature.hex()}")
-    print(f"Final subscription length: {len(data_buffer + signature)}")
-    print("=== END PYTHON DEBUGGING ===\n")
 
     # Subscription packed into data_buffer (signature added on). 
     # This will be sent to the decoder with ectf25.tv.subscribe

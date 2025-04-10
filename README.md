@@ -1,429 +1,277 @@
-# FIU eCTF 25' Installation Instructions
+# FIU eCTF 2025 - Satellite TV System 📺
 
-## Layout s
+## Table of Contents
+- [Overview](#overview)
+- [Repository Structure](#repository-structure)
+- [Installation and Setup](#installation-and-setup)
+  - [Environment Setup](#environment-setup)
+  - [Building the Deployment](#building-the-deployment)
+  - [Building the Decoder](#building-the-decoder)
+- [Usage Instructions](#usage-instructions)
+  - [Generating Subscription Updates](#generating-subscription-updates)
+  - [Flashing the Decoder](#flashing-the-decoder)
+  - [Using the Host Tools](#using-the-host-tools)
+    - [List Tool](#list-tool)
+    - [Subscription Update Tool](#subscription-update-tool)
+    - [Testing Tools](#testing-tools)
+        - [Tester Tool](#tester-tool)
+        - [Stability Test Tool](#stability-test-tool)
+        - [Stress Test Tool](#stress-test-tool)
+  - [Running the Complete System](#running-the-complete-system)
+    - [1. Uplink](#1-uplink)
+    - [2. Satellite](#2-satellite)
+    - [3. TV](#3-tv)
+- [Troubleshooting](#troubleshooting)
 
-- `decoder/` - Firmware for the television decoder.
-    - `project.mk` - This file defines project specific variables included in the Makefile
-    - `Makefile` - This makefile is invoked by the eCTF tools when creating a decoder.
-    - `Dockerfile` - Describes the build environment used by eCTF build tools.
-    - `inc/` - Directory with c header files
-    - `src/` - Directory with c source files
-    - `wolfssl/` - Location to place wolfssl library for included Crypto Example
-- `design/` - Host design elements
-    - `ectf25_design/` - Host design source code
-        - `encoder.py` - Encodes frames
-        - `gen_secrets.py` - Generates shared secrets
-        - `gen_subscription.py` - Generates subscription updates
-    - `pyproject.toml` - File that tells pip how to install this module
-- `frames/` - Example frame data
-- `tools/` - Host tools - DO NOT MODIFY ANYTHING IN THIS DIRECTORY
-    - `ectf25/` - Directory with tool source
-        - `tv/` - Sends received frames to the decoder
-            - `list.py` - Tool to list active decoder subscriptions
-            - `subscribe.py` - Tool to update decoder subscriptions
-        - `uplink/` - Encodes frames and sends them to satellite
-        - `utils/` - Host tool utilities
-            - `decoder.py` - Interface with decoder hardware/firmware. This file should not be directly executed.
-            - `flash.py` - Firmware update utility
-            - `stress_test.py` - Utility for testing decoder
-            - `tester.py` - Utility for testing decoder
-        - `satellite.py` - Broadcasts frames from uplink to all decoders
-    - `pyproject.toml` - File that tells pip how to install this module
+## Overview
 
-## Usage and Requirements
+This repository contains the implementation of a secure Satellite TV System for the MITRE eCTF 2025 competition. The system consists of three main components: an Encoder, a Satellite, and a Decoder. The Encoder encodes and encrypts TV frames, the Satellite broadcasts the encoded frames, and the Decoder decrypts and decodes the frames for viewing on authorized TVs.
 
-This repository contains three main elements: firmware source code, host design elements, and tooling.
+## Repository Structure
 
-Firmware is built through using the Docker environments for each component as
-described below. Be sure to have Docker running while executing docker commands.
+- **`decoder/`** - Firmware for the television decoder
+  - `project.mk` - Project-specific variables for the Makefile
+  - `Makefile` - Invoked by eCTF tools when creating a decoder
+  - `Dockerfile` - Build environment description
+  - `inc/` - C header files
+  - `src/` - C source files
+  - `scripts/` - Python scripts for decoder key access
+  - `wolfssl/` - WolfSSL cryptographic library
 
-Source code and tooling is provided that runs directly on the host. All of
-these tools are created in Python. Note that all example tool invocations
-are written for a Unix based OS. Users running these tools on windows may need
-to change some details of the command for their own machine (e.g. '`python` -> `py`',
-'`path/to/file`' -> '`path\to\file`', '`-v ./path/to/volume:/dest`' ->
-'`-v .\path\to\volume:/dest`', '`/dev/tty.usbmodem123`' -> '`COM12`').
+- **`design/`** - Host design elements
+  - `ectf25_design/` - Host design source code
+    - `encoder.py` - Frame encoding implementation
+    - `gen_secrets.py` - Shared secrets generation
+    - `gen_subscription.py` - Subscription generation
+  - `pyproject.toml` - Python package configuration
 
-**Note:** Command listed under any "Example Utilization" section should be executed from the root directory of this repository.
+- **`frames/`** - Example frame data
 
-### Environment Build
+- **`tools/`** - Host tools (**DO NOT MODIFY**)
+  - `ectf25/` - Tool source code
+    - `tv/` - TV-related functionality
+    - `uplink/` - Uplink functionality
+    - `utils/` - Utility functions
+    - `satellite.py` - Satellite functionality
+  - `pyproject.toml` - Python package configuration
 
-The environment is built with Docker, which should install all necessary packages for running the
-design in a reproducible fashion.
+## Installation and Setup
 
-When building for the first time, this may take some time (10+ minutes) to
-complete. Furthermore, it is recommended that you use a wired internet
-connection when building for the first time.
+### Environment Setup
 
-### Host Tools
+Our system uses Docker for building components and Python for host tools. Follow these steps to set up your environment:
 
-Host Tools includes everything in the `tools` directory. These do not need to be modified by teams
-except for local testing. Your design should work with the standardized
-interface between host and Decoder hardware. The host tools will pass any
-required arguments to the Decoder hardware and process all relevant output.
-
-### Decoder
-
-When building the decoder, the `Makefile` in the decoder directory will be
-invoked by the Docker run command.
-
-## Using the eCTF Tools
-
-In order to run the eCTF Tools, you must first ensure that you have installed
-all of the required packages (ideally into a virtual environment). You can
-install packages from the included `pyproject.toml` file in the root of the
-design and tools directories. This file should not be modified.
-
-### Linux:
-
+#### Linux:
 ```bash
-# Create a virtual environment in the root of the design
-cd <example_root>
+# Create a virtual environment
+cd <repository_root>
 python -m venv .venv --prompt ectf-example
 
 # Enable virtual environment
-. ./.venv/bin/activate
+source ./.venv/bin/activate
 
-# Install the host tools
+# Install host tools
 python -m pip install ./tools/
 
-# Install the host design elements as an editable module
+# Install host design elements as an editable module
 python -m pip install -e ./design/
 ```
 
-### PowerShell:
-
-```
-#Create a virtual environment in the root of the design
-cd .\<example_root>
+#### PowerShell:
+```powershell
+# Create a virtual environment
+cd <repository_root>
 python -m venv .venv --prompt ectf-example
 
-#Enable virtual environment 
-. .\.venv\Scripts\Activate.ps1
+# Enable virtual environment
+.\.venv\Scripts\Activate.ps1
 
-#Install the host tools
+# Install host tools
 python -m pip install .\tools\
 
-#Install the host design design elements as an editable module 
+# Install host design elements as an editable module
 python -m pip install -e .\design\
-
 ```
 
-### Building the deployment
+### Building the Deployment
 
-Optionally, shared secrets used by the decoder and encoder can be generated. A directory containing shared secrets
-should be
-mounted as a volume to the decoder docker image. This directory should be somewhere accessible to the decoder, host
-tools, and
-host design elements.
-
-This will generate a secrets file for channels 1, 3, and 4.
+First, generate the shared secrets used by the decoder and encoder:
 
 ```bash
 mkdir secrets
 python -m ectf25_design.gen_secrets secrets/secrets.json 1 3 4
 ```
 
+This will generate a secrets file for channels 1, 3, and 4.
+
 ### Building the Decoder
 
-The Decoder can be built next. The generated secrets will be available in the docker container at `/root/secrets/`.
+Next, build the decoder with a specific device ID:
 
-These commands will generate a Decoder build with a Device ID 0xdeadbeef. Build outputs are copied to the `build_out`
-directory.
-
-### Linux:
-
+#### Linux:
 ```bash
-cd <example_root>/decoder
+cd <repository_root>/decoder
 docker build -t decoder .
 docker run --rm -v ./build_out:/out -v ./:/decoder -v ./../secrets:/secrets -e DECODER_ID=0xdeadbeef decoder
 ```
 
-### PowerShell:
-
-```
-cd <example_root>\decoder 
+#### PowerShell:
+```powershell
+cd <repository_root>\decoder
 docker build -t decoder .
 docker run --rm -v .\build_out:/out -v .\:/decoder -v .\..\secrets:/secrets -e DECODER_ID=0xdeadbeef decoder
 ```
 
-#### Note: If the build is hanging indefinitely, try restarting Docker. If that does not resolve the issue, a system restart should fix the issue.
+> **Note:** If the build hangs indefinitely, try restarting Docker. If that doesn't help, restart your system.
 
-## Generating Subscription Updates
+## Usage Instructions
 
-Subscription updates are generated using the `gen_subscription.py` script.
-The `gen_subscription` function will be the only feature that teams will need to update.
+### Generating Subscription Updates
 
-```
-python -m ectf25_design.gen_subscription -h
-usage: gen_subscription.py [-h] [--force] secrets_file subscription_file device_id start end channel
-
-positional arguments:
-  secrets_file       Path to the secrets file created by ectf25_design.gen_secrets
-  subscription_file  Subscription output
-  device_id          Device ID of the update recipient.
-  start              Subscription start timestamp
-  end                Subscription end timestamp
-  channel            Channel to subscribe to
-
-options:
-  -h, --help         show this help message and exit
-  --force, -f        Force creation of subscription file, overwriting existing file
-```
-
-### **Example Utilization**
-
-This command will create a subscription file called subscription.bin targeting a device with ID 0xDEADBEEF, a start
-timestamp of 32, and an end timestamp of 128 for channel 1.
-
-#### Linux and PowerShell
+Use `gen_subscription.py` to generate subscription updates for decoders:
 
 ```bash
 python -m ectf25_design.gen_subscription secrets/secrets.json subscription.bin 0xDEADBEEF 32 128 1
 ```
 
-## Flashing
+This creates a subscription file targeting a device with ID 0xDEADBEEF, with a subscription window from timestamp 32 to 128 for channel 1.
 
-Flashing the MAX78000 is done through the eCTF Bootloader. You will need to initially flash
-the eCTF Bootloader onto the provided hardware. The device must be in update mode in order for
-these commands to execute (flashing blue LED).
+### Flashing the Decoder
 
-```
-python -m ectf25.utils.flash -h
-usage: ectf25.utils.flash [-h] infile port
+Flash the built firmware to your MAX78000 hardware. The device must be in update mode (flashing blue LED):
 
-positional arguments:
-  infile      Path to the input binary
-  port        Serial port
-
-options:
-  -h, --help  show this help message and exit
-```
-
-### **Example Utilization**
-
-#### Linux
-
+#### Linux:
 ```bash
 python -m ectf25.utils.flash ./decoder/build_out/max78000.bin /dev/tty.usbmodem11302
 ```
 
-#### PowerShell
-
-```
+#### PowerShell:
+```powershell
 python -m ectf25.utils.flash .\decoder\build_out\max78000.bin COM12
 ```
 
-## Host Tools
+### Using the Host Tools 
 
-### List Tool
+![HammerToolsGIF](https://github.com/user-attachments/assets/448f12e2-dadf-4623-b070-c814ec8065e4)
 
-The list tool applies the required list channels functionality from the Satellite TV Decoder system.
 
-```
-python -m ectf25.tv.list -h
-usage: ectf25.tv.list [-h] port
+> **NOTE** All arguments for these tools can be found within their files, within a function titled "parse_args()."
 
-List the channels with a subscription on the Decoder
+#### List Tool
 
-positional arguments:
-  port        Serial port to the Decoder (see https://rules.ectf.mitre.org/2025/getting_started/boot_reference for platform-specific instructions)
-
-options:
-  -h, --help  show this help message and exit
-```
-
-### **Example Utilization**
-
-#### Linux
+View the channels currently subscribed on a decoder:
 
 ```bash
+# Linux
 python -m ectf25.tv.list /dev/tty.usbmodem11302
-```
 
-#### PowerShell
-
-```
+# PowerShell
 python -m ectf25.tv.list COM12
 ```
 
-### Subscription Update Tool
+#### Subscription Update Tool
 
-The subscription update tool takes in an encoded update packet (in the form of a `.bin` file) and sends it to the
-decoder.
-
-```
-python -m ectf25.tv.subscribe -h
-usage: ectf25.tv.subscribe [-h] subscription_file port
-
-Updates a Decoder's subscription.
-
-positional arguments:
-  subscription_file  Path to the subscription file created by ectf25_design.gen_subscription
-  port               Serial port to the Decoder (see https://rules.ectf.mitre.org/2025/getting_started/boot_reference for platform-specific instructions)
-
-options:
-  -h, --help         show this help message and exit
-```
-
-### **Example Utilization**
-
-#### Linux
+Update a decoder's subscriptions:
 
 ```bash
+# Linux
 python -m ectf25.tv.subscribe subscription.bin /dev/tty.usbmodem11302
-```
 
-#### PowerShell
-
-```
+# PowerShell
 python -m ectf25.tv.subscribe subscription.bin COM12
 ```
 
-### Tester Tool
+This will subscribe the decoder on connected to specified port to the subscription written to subscription.bin
 
-The Tester tool can be used to test frame decoding functionality without the running the end to end infrastructure.
+#### Testing tools
 
-```
-python -m ectf25.utils.tester -h
-usage: ectf25.dev.tester [-h] --secrets SECRETS [--port PORT] [--delay DELAY] [--perf]
-                         [--stub-encoder] [--stub-decoder] [--dump-raw DUMP_RAW]
-                         [--dump-encoded DUMP_ENCODED] [--dump-decoded DUMP_DECODED]
-                         {stdin,rand,json} ...
+These are host tools that have been developed to help developers of this system optimize their designs. Use at your own free will.
 
-positional arguments:
-  {stdin,rand,json}
-    stdin               Read frames from stdin
-    rand                Generate random frames
-    json                Read frames from a json file like [[channel, frame, timestamp], ...]
+##### Tester Tool
 
-options:
-  -h, --help            show this help message and exit
-  --secrets SECRETS, -s SECRETS
-                        Path to the secrets file
-  --port PORT, -p PORT  Serial port to the Decoder (See https://rules.ectf.mitre.org/2025/getting_started/boot_reference for platform-specific instructions)
-  --delay DELAY, -d DELAY
-                        Delay after frame decoding
-  --perf                Display performance stats
-  --stub-encoder        Stub out encoder and pass frames directly to decoder
-  --stub-decoder        Stub out decoder and print decoded frames
-  --dump-raw DUMP_RAW   Dump raw frames to a file
-  --dump-encoded DUMP_ENCODED
-                        Dump encoded frames to a file
-  --dump-decoded DUMP_DECODED
-                        Dump decoded frames to a file
-```
-
-### **Example Utilization**
-
-#### Linux
+Test frame decoding functionality:
 
 ```bash
+# Linux
 python -m ectf25.utils.tester --port /dev/tty.usbmodem11302 -s secrets/secrets.json rand -c 1 -f 64
-```
 
-#### PowerShell
-
-```
+# PowerShell
 python -m ectf25.utils.tester --port COM12 -s secrets\secrets.json rand -c 1 -f 64
 ```
 
-## Running the Satellite and Encoder
+This will encode and decode randomly generated 64-byte frames on channel 1.
 
-To run all of the infrastructure, you will need to first start the uplink. Then, in a
-separate terminal window, start the satellite. Finally, start a TV for every decoder
-being tested while the satellite is running.
+##### Stability Test Tool
 
-### Uplink
-
-The uplink is the component of the Satellite TV system responsible for sending encoded
-frames to the satellite. It will use the encoder from your design to encode frames.
-
-```
-python -m ectf25.uplink -h
-usage: __main__.py [-h] secrets host port channels [channels ...]
-
-positional arguments:
-  secrets     Path to the secrets file
-  host        TCP hostname to serve on
-  port        TCP port to serve on
-  channels    List of channel:fps:frames_file pairings (e.g., 1:10:channel1_frames.json
-              2:20:channel2_frames.json)
-
-options:
-  -h, --help  show this help message and exit
-```
-
-### **Example Utilization**
-
-#### Linux
+Test frame encoding and decoding functionality w/ performance statistics (i.e. FPS, timing fails, failure rate, total decodes) through a single channel, in which a subscription is provided:
 
 ```bash
+# Powershell
+python -m ectf25.utils.stability_test -p COM12  -g secrets\secrets.json -c 1 -di 0xdeadbeef -r stab_test.log -d 240 -s 
+```
+
+This will encoded random frames (using secrets from secrets.json) on channel 1, for a device named 0xdeadbeef connected to port 12, for 240 minutes (4 hours), and a subscription to channel 1 is provided.
+
+##### Stress Test Tool
+
+Test encoder and decoder seperately. The tool generates frames for decoder to encode and dumps these frames to a chosen JSON file; The tool decodes encoded frames from any given file (JSON list of base64-encoded frames):
+
+###### encode
+```bash
+# Powershell
+python -m ectf25.utils.stress_test --test-size 10000 encode secrets\secrets.json --dump frames\encoded_frames.json
+```
+This will encode 10,000 random 64-byte frames (using secrets.json) and dump these encoded frames to encoded_frames.json.
+
+###### decode
+```bash
+# Powershell
+python -m ectf.utils.stress_test decode COM12 frames\encoded_frames.json
+```
+This will decode all frames from encoded_frames.json
+
+### Running the Complete System 
+
+![ItsAReallyGoodSystemWeGotGoingOnHereClintusMcgintusGIF](https://github.com/user-attachments/assets/f2f3d0e1-6594-4a36-ae70-eebb1b706014)
+
+
+To run the full system, you need to start three components in sequence (in order):
+
+#### 1. Uplink
+
+Start the uplink in one terminal:
+
+```bash
+# Linux/PowerShell
 python -m ectf25.uplink secrets/secrets.json localhost 2000 1:10:frames/x_c0.json
 ```
+> **Note:** This uses one of the sample frame files, and localhost must be used if your are running this locally
 
-#### PowerShell
+#### 2. Satellite
 
-```
-python -m ectf25.uplink secrets\secrets.json localhost 2000 1:10:frames/x_c0.json
-```
-
-### Satellite
-
-The satellite is responsible for broadcasting all frames received from the uplink to all
-listening TVs on the host computer.
-
-```
-python -m ectf25.satellite -h
-usage: satellite.py [-h] up_host up_port down_host channels [channels ...]
-
-positional arguments:
-  up_host     Hostname for uplink
-  up_port     Port for uplink
-  down_host   Hostname for downlink
-  channels    List of channel:down_port pairings (e.g., 1:2001 2:2002)
-
-options:
-  -h, --help  show this help message and exit
-```
-
-### **Example Utilization**
-
-#### Linux and PowerShell
+Start the satellite in another terminal:
 
 ```bash
+# Linux/PowerShell
 python -m ectf25.satellite localhost 2000 localhost 1:2001
 ```
 
-### TV
+#### 3. TV
 
-The TV is responsible for sending encoded frames received from the satellite to a
-decoder connected to the host computer and returning the decoded result.
-
-```
-python -m ectf25.tv.run -h
-usage: ectf25.tv.run [-h] [--baud BAUD] sat_host sat_port dec_port
-
-positional arguments:
-  sat_host     TCP host of the satellite
-  sat_port     TCP port of the satellite
-  dec_port     Serial port to the Decoder (see https://rules.ectf.mitre.org/2025/getting_started/boot_reference for platform-specific instructions)
-
-options:
-  -h, --help   show this help message and exit
-  --baud BAUD  Baud rate of the serial port
-```
-
-### **Example Utilization**
-
-#### Linux
+Start the TV for each decoder:
 
 ```bash
+# Linux
 python -m ectf25.tv.run localhost 2001 /dev/tty.usbmodem11302
-```
 
-#### PowerShell
-
-```
+# PowerShell
 python -m ectf25.tv.run localhost 2001 COM12
 ```
+
+## Troubleshooting
+
+- **Build hangs indefinitely**: Restart Docker or your system
+- **Connection issues**: Verify your port settings and device connections
+- **Subscription failures**: Check that the device ID and channel numbers match your configuration
+- **Decoder not responding**: Ensure the device is properly flashed and in the correct mode
+- **Frame decoding issues**: Verify that subscriptions are active and that secrets are properly configured
