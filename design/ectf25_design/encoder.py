@@ -26,7 +26,6 @@ Description:
 
 
 ########INCLUDES#########
-import argparse
 from os import urandom
 import struct
 import json

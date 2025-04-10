@@ -221,12 +221,12 @@ static int constant_time_memcmp(const void* a, const void* b, size_t len) {
     return (result != 0);
 }
 
-/**
- * @brief Add noise to power consumption to protect against power analysis attacks
- * 
- * This function executes random operations to mask power analysis during sensitive/cryptographic operations.
- * 
- */
+/**********************************************************************************
+  @brief Add noise to power consumption to protect against power analysis attacks
+  
+  This function executes random operations to mask power analysis during sensitive/cryptographic operations.
+  
+ **********************************************************************************/
 static void add_power_noise(void) {
     
 
@@ -283,7 +283,8 @@ static void add_power_noise(void) {
 
 /***************************************************************
    @brief Lists out the actively subscribed channels over UART.
-    @return 0 if successful.
+
+   @return 0 if successful.
 ***************************************************************/
 int list_channels() {
     list_response_t resp;
@@ -356,7 +357,6 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
         &update->channel, sizeof(channel_id_t));
 
     // Get subscription/master key using the load_subscription_key 
-    // mask power signal
     add_power_noise();
     uint8_t key_bytes[SUBSCRIPTION_KEY_SIZE];
     load_subscription_key(key_bytes);
