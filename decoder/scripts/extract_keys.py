@@ -126,7 +126,7 @@ def generate_key_header(key_data, output_path):
                         'size': len(key_bytes)
                     }
                     
-                    print(f"Successfully extracted and obfuscated {header_name} ({len(key_bytes)} bytes)")
+                    print(f"Successfully extracted and obfuscated {header_name}")
                 except ValueError:
                     print(f"Error: '{json_key}' is not a valid hex string")
         
