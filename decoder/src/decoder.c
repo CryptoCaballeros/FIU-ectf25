@@ -549,7 +549,7 @@ int decode(pkt_len_t pkt_len, frame_packet_t *new_frame) {
         // Get Encryption key from secrets
         add_power_noise();
         uint8_t encryption_key [ENCRYPTION_KEY_SIZE];
-        load_encryption_key(encryption_key, ENCRYPTION_KEY_SIZE);
+        load_encryption_key(encryption_key);
         add_power_noise();
 
         decrypted_size = aes_decrypt(ciphertext, ciphertext_size, encryption_key, iv, decrypted_data);
