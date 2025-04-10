@@ -235,6 +235,52 @@ static int constant_time_memcmp(const void* a, const void* b, size_t len) {
     return (result != 0);
 }
 
+/**
+ * @brief Add noise to power consumption to protect against power analysis attacks
+ * 
+ * This function executes random operations to mask power analysis during sensitive/cryptographic operations.
+ * 
+ */
+static void add_power_noise(void) {
+    // Create volatile buffers that won't be optimized out by compiler
+    volatile uint8_t noise_buffer[32];
+    volatile uint8_t result_buffer[32];
+    
+    // Use hardware TRNG to get random data
+    for (int i = 0; i < sizeof(noise_buffer); i++) {
+        MXC_TRNG_Random((uint8_t*)&noise_buffer[i], 1);
+    }
+    
+    // Perform dummy arithmetic operations that consume power in a data-independent manner
+    for (int i = 0; i < sizeof(noise_buffer); i++) {
+        // Mix operations that consume different power
+        result_buffer[i] = (noise_buffer[i] ^ 0x55);
+        result_buffer[i] += (noise_buffer[(i+7) % sizeof(noise_buffer)] & 0xAA);
+        result_buffer[i] *= (noise_buffer[(i+13) % sizeof(noise_buffer)] | 0x33);
+        
+        // Add compiler memory barriers to prevent optimization
+        __asm__ volatile("" : : : "memory");
+        
+        // Ensure variable number of operations to create timing jitter
+        uint8_t iterations = (noise_buffer[i] & 0x07) + 1;
+        for (uint8_t j = 0; j < iterations; j++) {
+            result_buffer[i] ^= (result_buffer[(i+j) % sizeof(result_buffer)] + j);
+        }
+    }
+    
+    // Force use of results to prevent compiler optimizations
+    uint8_t checksum = 0;
+    for (int i = 0; i < sizeof(result_buffer); i++) {
+        checksum ^= result_buffer[i];
+    }
+    
+    // Use the checksum in a way that doesn't affect program logic
+    // but prevents the compiler from removing the code
+    if (checksum == 0xFF) {
+        // This branch almost never executes, but compiler can't prove it ;)
+        __asm__ volatile("nop");
+    }
+}
 
 /**********************************************************
  ********************* CORE FUNCTIONS *********************
@@ -315,9 +361,12 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     memcpy(verify_buffer + sizeof(decoder_id_t) + sizeof(timestamp_t) * 2,
         &update->channel, sizeof(channel_id_t));
 
-    // Get subscription/master key using the load_subscription_key function
+    // Get subscription/master key using the load_subscription_key 
+    // mask power signal
+    add_power_noise();
     uint8_t key_bytes[SUBSCRIPTION_KEY_SIZE];
     load_subscription_key(key_bytes);
+    add_power_noise();
 
     // Convert device ID to bytes (similar to Python format)
     uint8_t device_id_bytes[sizeof(decoder_id_t)]; // buffer for device id
@@ -346,9 +395,11 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     }
 
     // Compute HMAC: H((device key ⊕ opad) || H((device key ⊕ ipad) || verify buffer))
+    add_power_noise();
     hash_result = compute_hmac(device_key, HASH_SIZE, verify_buffer, sizeof(verify_buffer), computed_hash);
 
     if (hash_result != 0) {
+        add_power_noise();
         char error_buf[64];
         sprintf(error_buf, "WolfSSL hash returned error: %d", hash_result);
         print_debug(error_buf);
@@ -358,6 +409,7 @@ int update_subscription(pkt_len_t pkt_len, subscription_update_packet_t *update)
     }
 
     // Securely clear the key from memory when done
+    add_power_noise();
     secure_clear(key_bytes, SUBSCRIPTION_KEY_SIZE);
     secure_clear(device_key_input, device_key_input_size);
 
