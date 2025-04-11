@@ -65,7 +65,7 @@ Our system uses Docker for building components and Python for host tools. Follow
 ```bash
 # Create a virtual environment
 cd <repository_root>
-python -m venv .venv --prompt ectf-example
+python -m venv .venv --prompt FIU-ectf
 
 # Enable virtual environment
 source ./.venv/bin/activate
