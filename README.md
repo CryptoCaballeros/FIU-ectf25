@@ -27,6 +27,10 @@
 
 This repository contains the implementation of a secure Satellite TV System for the MITRE eCTF 2025 competition. The system consists of three main components: an Encoder, a Satellite, and a Decoder. The Encoder encodes and encrypts TV frames, the Satellite broadcasts the encoded frames, and the Decoder decrypts and decodes the frames for viewing on authorized TVs. This README will explain how to setup and use the properties of this system with some sample code.
 
+If you wish to gain a deeper understanding of our system here is a link to an AI generated descriprion (via deepwiki) where you can ask questions for clarification: 
+
+<a target="_blank" href="https://deepwiki.com/CryptoCaballeros/FIU-ectf25" title="DeepWiki for CryptoCaballeros/FIU-ectf25 repository"><img height="26px" src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki">
+
 ## Repository Structure
 
 - **`decoder/`** - Firmware for the television decoder
